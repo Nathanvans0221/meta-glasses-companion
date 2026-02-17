@@ -21,14 +21,5 @@
         "autoIncrement": true
       }
     }
-  },
-  "submit": {
-    "production": {
-      "ios": {
-        "appleId": "nathan@silverfern.com",
-        "ascAppId": "",
-        "appleTeamId": ""
-      }
-    }
   }
 }

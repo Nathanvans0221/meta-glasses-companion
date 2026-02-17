@@ -18,7 +18,13 @@
       "infoPlist": {
         "NSBluetoothAlwaysUsageDescription": "WorkSuite Voice uses Bluetooth to connect to your Meta Ray-Ban glasses for hands-free voice commands.",
         "NSMicrophoneUsageDescription": "WorkSuite Voice uses the microphone to capture voice commands for AI processing.",
-        "UIBackgroundModes": ["audio", "bluetooth-central"]
+        "UIBackgroundModes": [
+          "audio",
+          "bluetooth-central",
+          "audio",
+          "bluetooth-central"
+        ],
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -33,7 +39,10 @@
         "BLUETOOTH_CONNECT",
         "BLUETOOTH_SCAN",
         "ACCESS_FINE_LOCATION",
-        "RECORD_AUDIO"
+        "RECORD_AUDIO",
+        "android.permission.BLUETOOTH",
+        "android.permission.BLUETOOTH_ADMIN",
+        "android.permission.BLUETOOTH_CONNECT"
       ]
     },
     "plugins": [
@@ -49,10 +58,19 @@
         "react-native-ble-plx",
         {
           "isBackgroundEnabled": true,
-          "modes": ["peripheral", "central"],
-          "bluetoothAlwaysPermission": "WorkSuite Voice needs Bluetooth to connect to Meta Ray-Ban glasses.",
+          "modes": [
+            "peripheral",
+            "central"
+          ],
+          "bluetoothAlwaysPermission": "WorkSuite Voice needs Bluetooth to connect to Meta Ray-Ban glasses."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "530c0bbd-fe42-4480-ae98-9a226e4d09cd"
+      }
+    },
+    "owner": "nathanvans221"
   }
 }
