@@ -6,7 +6,8 @@ import { Text } from 'react-native';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { DevicesScreen } from './src/screens/DevicesScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
-import { COLORS } from './src/constants';
+import { useTheme } from './src/hooks/useTheme';
+import { useSettingsStore } from './src/stores/settingsStore';
 
 const Tab = createBottomTabNavigator();
 
@@ -24,23 +25,26 @@ function TabIcon({ label, focused }: { label: string; focused: boolean }) {
 }
 
 export default function App() {
+  const colors = useTheme();
+  const darkMode = useSettingsStore((s) => s.darkMode);
+
   return (
     <NavigationContainer>
-      <StatusBar style="light" />
+      <StatusBar style={darkMode ? 'light' : 'dark'} />
       <Tab.Navigator
         screenOptions={({ route }) => ({
           headerStyle: {
-            backgroundColor: COLORS.primary,
+            backgroundColor: colors.primary,
             shadowColor: 'transparent',
           },
-          headerTintColor: COLORS.text,
+          headerTintColor: colors.text,
           headerTitleStyle: { fontWeight: '700' },
           tabBarStyle: {
-            backgroundColor: COLORS.primary,
-            borderTopColor: COLORS.surfaceLight,
+            backgroundColor: colors.primary,
+            borderTopColor: colors.surfaceLight,
           },
-          tabBarActiveTintColor: COLORS.highlight,
-          tabBarInactiveTintColor: COLORS.textSecondary,
+          tabBarActiveTintColor: colors.highlight,
+          tabBarInactiveTintColor: colors.textSecondary,
           tabBarIcon: ({ focused }) => (
             <TabIcon label={route.name} focused={focused} />
           ),

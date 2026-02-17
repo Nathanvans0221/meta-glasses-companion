@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { View, StyleSheet, KeyboardAvoidingView, Platform, TextInput, Pressable, Text } from 'react-native';
+import { View, StyleSheet, TextInput, Pressable, Text } from 'react-native';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { ConnectionStatus } from '../components/ConnectionStatus';
 import { PushToTalkButton } from '../components/PushToTalkButton';
@@ -9,9 +9,10 @@ import { useSettingsStore } from '../stores/settingsStore';
 import { geminiService } from '../services/gemini';
 import { audioService } from '../services/audio';
 import { websocketService } from '../services/websocket';
-import { COLORS } from '../constants';
+import { useTheme } from '../hooks/useTheme';
 
 export function HomeScreen() {
+  const colors = useTheme();
   const addMessage = useConversationStore((s) => s.addMessage);
   const setWsState = useConversationStore((s) => s.setWsState);
   const setSessionActive = useConversationStore((s) => s.setSessionActive);
@@ -28,12 +29,10 @@ export function HomeScreen() {
   }, [keepAwake]);
 
   useEffect(() => {
-    // Initialize audio service
     audioService.initialize().catch((err) => {
       addMessage('system', `Audio init failed: ${err.message}`);
     });
 
-    // Listen for Gemini responses
     geminiService.onTranscript((text, role) => {
       addMessage(role, text);
     });
@@ -46,7 +45,6 @@ export function HomeScreen() {
       }
     });
 
-    // Track WebSocket state
     const unsub = websocketService.onStateChange((state) => {
       setWsState(state as any);
       setSessionActive(state === 'connected');
@@ -83,11 +81,11 @@ export function HomeScreen() {
   const wsState = useConversationStore((s) => s.wsState);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ConnectionStatus />
 
       {wsState !== 'connected' && (
-        <Pressable style={styles.connectButton} onPress={connectToGemini}>
+        <Pressable style={[styles.connectButton, { backgroundColor: colors.highlight }]} onPress={connectToGemini}>
           <Text style={styles.connectText}>
             {wsState === 'connecting' ? 'Connecting...' : 'Connect to AI'}
           </Text>
@@ -96,25 +94,25 @@ export function HomeScreen() {
 
       <TranscriptView />
 
-      <View style={styles.inputArea}>
+      <View style={[styles.inputArea, { backgroundColor: colors.surface, borderTopColor: colors.surfaceLight }]}>
         <PushToTalkButton />
 
         <View style={styles.textInputRow}>
           <TextInput
-            style={styles.textInput}
+            style={[styles.textInput, { backgroundColor: colors.surfaceLight, color: colors.text }]}
             value={textInput}
             onChangeText={setTextInput}
             placeholder="Or type a message..."
-            placeholderTextColor={COLORS.textSecondary}
+            placeholderTextColor={colors.textSecondary}
             onSubmitEditing={sendTextMessage}
             returnKeyType="send"
           />
           <Pressable
-            style={styles.sendButton}
+            style={[styles.sendButton, { backgroundColor: colors.accent }]}
             onPress={sendTextMessage}
             disabled={!textInput.trim()}
           >
-            <Text style={styles.sendText}>Send</Text>
+            <Text style={[styles.sendText, { color: '#ffffff' }]}>Send</Text>
           </Pressable>
         </View>
       </View>
@@ -125,26 +123,22 @@ export function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
   },
   connectButton: {
     margin: 16,
     padding: 14,
-    backgroundColor: COLORS.highlight,
     borderRadius: 12,
     alignItems: 'center',
   },
   connectText: {
-    color: COLORS.text,
+    color: '#ffffff',
     fontSize: 16,
     fontWeight: '700',
   },
   inputArea: {
     padding: 16,
     paddingBottom: 32,
-    backgroundColor: COLORS.surface,
     borderTopWidth: 1,
-    borderTopColor: COLORS.surfaceLight,
     gap: 16,
   },
   textInputRow: {
@@ -153,8 +147,6 @@ const styles = StyleSheet.create({
   },
   textInput: {
     flex: 1,
-    backgroundColor: COLORS.surfaceLight,
-    color: COLORS.text,
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 24,
@@ -163,11 +155,9 @@ const styles = StyleSheet.create({
   sendButton: {
     paddingHorizontal: 16,
     justifyContent: 'center',
-    backgroundColor: COLORS.accent,
     borderRadius: 24,
   },
   sendText: {
-    color: COLORS.text,
     fontWeight: '600',
   },
 });

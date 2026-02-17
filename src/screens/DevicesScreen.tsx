@@ -1,13 +1,14 @@
 import React, { useCallback } from 'react';
-import { View, Text, FlatList, Pressable, StyleSheet, Alert } from 'react-native';
+import { View, Text, FlatList, Pressable, StyleSheet } from 'react-native';
 import { useBluetoothStore } from '../stores/bluetoothStore';
 import { useConversationStore } from '../stores/conversationStore';
 import { bluetoothService } from '../services/bluetooth';
 import { DeviceCard } from '../components/DeviceCard';
 import type { BleDevice } from '../types';
-import { COLORS } from '../constants';
+import { useTheme } from '../hooks/useTheme';
 
 export function DevicesScreen() {
+  const colors = useTheme();
   const btState = useBluetoothStore((s) => s.state);
   const devices = useBluetoothStore((s) => s.devices);
   const connectedDeviceId = useBluetoothStore((s) => s.connectedDeviceId);
@@ -32,7 +33,6 @@ export function DevicesScreen() {
         },
       );
 
-      // Auto-stop scan after 15 seconds
       setTimeout(() => {
         bluetoothService.stopScan();
         setBtState(connectedDeviceId ? 'connected' : 'disconnected');
@@ -59,7 +59,6 @@ export function DevicesScreen() {
         setBtState('connected');
         addMessage('system', `Connected to ${device.name}`);
 
-        // Listen for disconnection
         bluetoothService.onDeviceDisconnected((deviceId) => {
           setConnectedDevice(null);
           setBtState('disconnected');
@@ -85,10 +84,10 @@ export function DevicesScreen() {
   }, [setConnectedDevice, setBtState, setError, addMessage]);
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.header}>
-        <Text style={styles.title}>Meta Ray-Ban Glasses</Text>
-        <Text style={styles.subtitle}>
+        <Text style={[styles.title, { color: colors.text }]}>Meta Ray-Ban Glasses</Text>
+        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
           {btState === 'scanning'
             ? `Scanning... (${devices.length} found)`
             : connectedDeviceId
@@ -99,15 +98,15 @@ export function DevicesScreen() {
 
       <View style={styles.actions}>
         {connectedDeviceId ? (
-          <Pressable style={[styles.button, styles.disconnectButton]} onPress={disconnect}>
+          <Pressable style={[styles.button, { backgroundColor: colors.error }]} onPress={disconnect}>
             <Text style={styles.buttonText}>Disconnect</Text>
           </Pressable>
         ) : btState === 'scanning' ? (
-          <Pressable style={styles.button} onPress={stopScan}>
+          <Pressable style={[styles.button, { backgroundColor: colors.accent }]} onPress={stopScan}>
             <Text style={styles.buttonText}>Stop Scan</Text>
           </Pressable>
         ) : (
-          <Pressable style={styles.button} onPress={startScan}>
+          <Pressable style={[styles.button, { backgroundColor: colors.accent }]} onPress={startScan}>
             <Text style={styles.buttonText}>Scan for Glasses</Text>
           </Pressable>
         )}
@@ -127,7 +126,7 @@ export function DevicesScreen() {
         ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Text style={styles.emptyText}>
+            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
               {btState === 'scanning'
                 ? 'Searching for Meta Ray-Ban glasses...'
                 : 'Tap "Scan for Glasses" to find nearby devices'}
@@ -142,7 +141,6 @@ export function DevicesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
   },
   header: {
     padding: 20,
@@ -150,12 +148,10 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   title: {
-    color: COLORS.text,
     fontSize: 22,
     fontWeight: '700',
   },
   subtitle: {
-    color: COLORS.textSecondary,
     fontSize: 14,
   },
   actions: {
@@ -163,16 +159,12 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
   },
   button: {
-    backgroundColor: COLORS.accent,
     padding: 14,
     borderRadius: 12,
     alignItems: 'center',
   },
-  disconnectButton: {
-    backgroundColor: COLORS.error,
-  },
   buttonText: {
-    color: COLORS.text,
+    color: '#ffffff',
     fontSize: 16,
     fontWeight: '600',
   },
@@ -184,7 +176,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   emptyText: {
-    color: COLORS.textSecondary,
     fontSize: 14,
     textAlign: 'center',
   },

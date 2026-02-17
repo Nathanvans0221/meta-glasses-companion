@@ -13,7 +13,7 @@ export const AUDIO_CHANNELS = 1;
 export const AUDIO_BIT_DEPTH = 16;
 
 // UI Colors
-export const COLORS = {
+export const COLORS_DARK = {
   primary: '#1a1a2e',
   secondary: '#16213e',
   accent: '#0f3460',
@@ -27,3 +27,25 @@ export const COLORS = {
   surface: '#1a1a2e',
   surfaceLight: '#252540',
 } as const;
+
+export const COLORS_LIGHT = {
+  primary: '#ffffff',
+  secondary: '#f0f0f5',
+  accent: '#3b82f6',
+  highlight: '#e94560',
+  success: '#16a34a',
+  warning: '#f59e0b',
+  error: '#ef4444',
+  text: '#1a1a2e',
+  textSecondary: '#6b7280',
+  background: '#f5f5fa',
+  surface: '#ffffff',
+  surfaceLight: '#e5e7eb',
+} as const;
+
+// Default export for backward compat — components should use useTheme() instead
+export const COLORS = COLORS_DARK;
+
+export type ThemeColors = {
+  [K in keyof typeof COLORS_DARK]: string;
+};

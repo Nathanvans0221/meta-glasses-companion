@@ -28,4 +28,5 @@ export interface AppSettings {
   geminiModel: string;
   autoReconnect: boolean;
   keepAwake: boolean;
+  darkMode: boolean;
 }

@@ -1,24 +1,24 @@
 import React, { useRef, useEffect } from 'react';
 import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import { useConversationStore } from '../stores/conversationStore';
-import { COLORS } from '../constants';
+import { useTheme } from '../hooks/useTheme';
 
 export function TranscriptView() {
+  const colors = useTheme();
   const messages = useConversationStore((s) => s.messages);
   const scrollRef = useRef<ScrollView>(null);
 
   useEffect(() => {
-    // Auto-scroll to bottom on new messages
     scrollRef.current?.scrollToEnd({ animated: true });
   }, [messages]);
 
   if (messages.length === 0) {
     return (
       <View style={styles.emptyContainer}>
-        <Text style={styles.emptyText}>
+        <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
           Tap and hold the button to start talking
         </Text>
-        <Text style={styles.emptySubtext}>
+        <Text style={[styles.emptySubtext, { color: colors.textSecondary }]}>
           Your conversation will appear here
         </Text>
       </View>
@@ -36,15 +36,16 @@ export function TranscriptView() {
           key={msg.id}
           style={[
             styles.bubble,
-            msg.role === 'user' ? styles.userBubble : styles.assistantBubble,
-            msg.role === 'system' && styles.systemBubble,
+            msg.role === 'user' && [styles.userBubble, { backgroundColor: colors.accent }],
+            msg.role === 'assistant' && [styles.assistantBubble, { backgroundColor: colors.surfaceLight }],
+            msg.role === 'system' && [styles.systemBubble, { borderColor: colors.surfaceLight }],
           ]}
         >
-          <Text style={styles.roleLabel}>
+          <Text style={[styles.roleLabel, { color: colors.highlight }]}>
             {msg.role === 'user' ? 'You' : msg.role === 'assistant' ? 'AI' : 'System'}
           </Text>
-          <Text style={styles.messageText}>{msg.text}</Text>
-          <Text style={styles.timestamp}>
+          <Text style={[styles.messageText, { color: colors.text }]}>{msg.text}</Text>
+          <Text style={[styles.timestamp, { color: colors.textSecondary }]}>
             {new Date(msg.timestamp).toLocaleTimeString()}
           </Text>
         </View>
@@ -68,12 +69,10 @@ const styles = StyleSheet.create({
     padding: 32,
   },
   emptyText: {
-    color: COLORS.textSecondary,
     fontSize: 16,
     textAlign: 'center',
   },
   emptySubtext: {
-    color: COLORS.textSecondary,
     fontSize: 13,
     textAlign: 'center',
     marginTop: 8,
@@ -85,12 +84,10 @@ const styles = StyleSheet.create({
     maxWidth: '85%',
   },
   userBubble: {
-    backgroundColor: COLORS.accent,
     alignSelf: 'flex-end',
     borderBottomRightRadius: 4,
   },
   assistantBubble: {
-    backgroundColor: COLORS.surfaceLight,
     alignSelf: 'flex-start',
     borderBottomLeftRadius: 4,
   },
@@ -98,22 +95,18 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
     alignSelf: 'center',
     borderWidth: 1,
-    borderColor: COLORS.surfaceLight,
   },
   roleLabel: {
-    color: COLORS.highlight,
     fontSize: 10,
     fontWeight: '700',
     textTransform: 'uppercase',
     marginBottom: 4,
   },
   messageText: {
-    color: COLORS.text,
     fontSize: 15,
     lineHeight: 20,
   },
   timestamp: {
-    color: COLORS.textSecondary,
     fontSize: 10,
     marginTop: 4,
     alignSelf: 'flex-end',

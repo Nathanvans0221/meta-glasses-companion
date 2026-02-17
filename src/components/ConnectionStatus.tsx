@@ -2,37 +2,38 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { useBluetoothStore } from '../stores/bluetoothStore';
 import { useConversationStore } from '../stores/conversationStore';
-import { COLORS } from '../constants';
+import { useTheme } from '../hooks/useTheme';
 
 export function ConnectionStatus() {
+  const colors = useTheme();
   const btState = useBluetoothStore((s) => s.state);
   const wsState = useConversationStore((s) => s.wsState);
 
   const btColor =
     btState === 'connected'
-      ? COLORS.success
+      ? colors.success
       : btState === 'scanning' || btState === 'connecting'
-        ? COLORS.warning
-        : COLORS.error;
+        ? colors.warning
+        : colors.error;
 
   const wsColor =
     wsState === 'connected'
-      ? COLORS.success
+      ? colors.success
       : wsState === 'connecting'
-        ? COLORS.warning
-        : COLORS.error;
+        ? colors.warning
+        : colors.error;
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.surface, borderBottomColor: colors.surfaceLight }]}>
       <View style={styles.indicator}>
         <View style={[styles.dot, { backgroundColor: btColor }]} />
-        <Text style={styles.label}>
+        <Text style={[styles.label, { color: colors.textSecondary }]}>
           Glasses: {btState}
         </Text>
       </View>
       <View style={styles.indicator}>
         <View style={[styles.dot, { backgroundColor: wsColor }]} />
-        <Text style={styles.label}>
+        <Text style={[styles.label, { color: colors.textSecondary }]}>
           AI: {wsState}
         </Text>
       </View>
@@ -46,9 +47,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
     paddingVertical: 8,
     paddingHorizontal: 16,
-    backgroundColor: COLORS.surface,
     borderBottomWidth: 1,
-    borderBottomColor: COLORS.surfaceLight,
   },
   indicator: {
     flexDirection: 'row',
@@ -61,7 +60,6 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   label: {
-    color: COLORS.textSecondary,
     fontSize: 12,
     textTransform: 'capitalize',
   },

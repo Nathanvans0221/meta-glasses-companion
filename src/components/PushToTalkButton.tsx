@@ -9,9 +9,10 @@ import {
 import { useConversationStore } from '../stores/conversationStore';
 import { audioService } from '../services/audio';
 import { geminiService } from '../services/gemini';
-import { COLORS } from '../constants';
+import { useTheme } from '../hooks/useTheme';
 
 export function PushToTalkButton() {
+  const colors = useTheme();
   const audioState = useConversationStore((s) => s.audioState);
   const setAudioState = useConversationStore((s) => s.setAudioState);
   const addMessage = useConversationStore((s) => s.addMessage);
@@ -43,10 +44,7 @@ export function PushToTalkButton() {
       setAudioState('processing');
       const uri = await audioService.stopRecording();
       if (uri) {
-        // In production, we'd stream audio chunks during recording.
-        // For MVP, we send the recorded file after release.
         addMessage('user', '[Voice message sent]');
-        // TODO: Read file as base64 and send via geminiService.sendAudio()
       }
       setAudioState('idle');
     } catch (err) {
@@ -72,17 +70,22 @@ export function PushToTalkButton() {
           onPressOut={handlePressOut}
           style={[
             styles.button,
-            isRecording && styles.buttonActive,
+            { backgroundColor: colors.accent, borderColor: colors.highlight },
+            isRecording && { backgroundColor: colors.highlight, borderColor: colors.text },
           ]}
         >
-          <View style={[styles.innerRing, isRecording && styles.innerRingActive]}>
-            <Text style={styles.icon}>
+          <View style={[
+            styles.innerRing,
+            { backgroundColor: colors.surfaceLight, borderColor: colors.accent },
+            isRecording && { backgroundColor: 'rgba(233, 69, 96, 0.3)', borderColor: colors.text },
+          ]}>
+            <Text style={[styles.icon, { color: colors.text }]}>
               {isRecording ? '||' : '\u25B6'}
             </Text>
           </View>
         </Pressable>
       </Animated.View>
-      <Text style={styles.label}>{stateLabel}</Text>
+      <Text style={[styles.label, { color: colors.textSecondary }]}>{stateLabel}</Text>
     </View>
   );
 }
@@ -96,37 +99,23 @@ const styles = StyleSheet.create({
     width: 120,
     height: 120,
     borderRadius: 60,
-    backgroundColor: COLORS.accent,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 3,
-    borderColor: COLORS.highlight,
-  },
-  buttonActive: {
-    backgroundColor: COLORS.highlight,
-    borderColor: COLORS.text,
   },
   innerRing: {
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: COLORS.surfaceLight,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: COLORS.accent,
-  },
-  innerRingActive: {
-    backgroundColor: 'rgba(233, 69, 96, 0.3)',
-    borderColor: COLORS.text,
   },
   icon: {
     fontSize: 28,
-    color: COLORS.text,
     fontWeight: 'bold',
   },
   label: {
-    color: COLORS.textSecondary,
     fontSize: 14,
     fontWeight: '600',
   },

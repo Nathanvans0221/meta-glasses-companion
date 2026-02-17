@@ -10,6 +10,7 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
   geminiModel: 'gemini-2.0-flash-exp',
   autoReconnect: true,
   keepAwake: true,
+  darkMode: true,
 
   updateSettings: (partial) => set(partial),
 }));
