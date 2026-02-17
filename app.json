@@ -20,8 +20,6 @@
         "NSMicrophoneUsageDescription": "WorkSuite Voice uses the microphone to capture voice commands for AI processing.",
         "UIBackgroundModes": [
           "audio",
-          "bluetooth-central",
-          "audio",
           "bluetooth-central"
         ],
         "ITSAppUsesNonExemptEncryption": false
@@ -66,6 +64,12 @@
         }
       ]
     ],
+    "updates": {
+      "url": "https://u.expo.dev/530c0bbd-fe42-4480-ae98-9a226e4d09cd"
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "extra": {
       "eas": {
         "projectId": "530c0bbd-fe42-4480-ae98-9a226e4d09cd"
