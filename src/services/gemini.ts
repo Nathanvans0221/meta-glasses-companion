@@ -1,6 +1,6 @@
 import { websocketService } from './websocket';
 import { audioService } from './audio';
-import { GEMINI_WS_URL, GEMINI_DEFAULT_MODEL } from '../constants';
+import { GEMINI_WS_BASE, GEMINI_DEFAULT_MODEL } from '../constants';
 
 export interface GeminiConfig {
   apiKey: string;
@@ -24,24 +24,25 @@ class GeminiService {
     }
 
     const model = this.config.model || GEMINI_DEFAULT_MODEL;
-    const url = `${GEMINI_WS_URL}/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${this.config.apiKey}`;
+    const url = `${GEMINI_WS_BASE}?key=${this.config.apiKey}`;
 
     // Listen for incoming messages
     this.unsubscribeMessage = websocketService.onMessage((data) => {
       this.handleServerMessage(data);
     });
 
-    websocketService.connect(url);
+    // Disable auto-reconnect — we handle reconnection at the UI level
+    websocketService.connect(url, false);
 
     // Wait for connection, then send setup
     await new Promise<void>((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error('Connection timeout')), 10000);
+      const timeout = setTimeout(() => reject(new Error('Connection timeout')), 15000);
       const unsub = websocketService.onStateChange((state) => {
         if (state === 'connected') {
           clearTimeout(timeout);
           unsub();
           resolve();
-        } else if (state === 'error') {
+        } else if (state === 'error' || state === 'disconnected') {
           clearTimeout(timeout);
           unsub();
           reject(new Error('Connection failed'));
