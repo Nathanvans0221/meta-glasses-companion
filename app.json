@@ -1,30 +1,58 @@
 {
   "expo": {
-    "name": "meta-glasses-companion",
+    "name": "WorkSuite Voice",
     "slug": "meta-glasses-companion",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#0a0a1a"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": false,
+      "bundleIdentifier": "com.silverfern.worksuitevoice",
+      "infoPlist": {
+        "NSBluetoothAlwaysUsageDescription": "WorkSuite Voice uses Bluetooth to connect to your Meta Ray-Ban glasses for hands-free voice commands.",
+        "NSMicrophoneUsageDescription": "WorkSuite Voice uses the microphone to capture voice commands for AI processing.",
+        "UIBackgroundModes": ["audio", "bluetooth-central"]
+      }
     },
     "android": {
+      "package": "com.silverfern.worksuitevoice",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#0a0a1a"
       },
-      "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "permissions": [
+        "BLUETOOTH",
+        "BLUETOOTH_ADMIN",
+        "BLUETOOTH_CONNECT",
+        "BLUETOOTH_SCAN",
+        "ACCESS_FINE_LOCATION",
+        "RECORD_AUDIO"
+      ]
     },
-    "web": {
-      "favicon": "./assets/favicon.png"
-    }
+    "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "15.1"
+          }
+        }
+      ],
+      [
+        "react-native-ble-plx",
+        {
+          "isBackgroundEnabled": true,
+          "modes": ["peripheral", "central"],
+          "bluetoothAlwaysPermission": "WorkSuite Voice needs Bluetooth to connect to Meta Ray-Ban glasses.",
+        }
+      ]
+    ]
   }
 }
