@@ -4,6 +4,7 @@ import { AUDIO_SAMPLE_RATE, AUDIO_CHANNELS } from '../constants';
 class AudioService {
   private recording: Audio.Recording | null = null;
   private sound: Audio.Sound | null = null;
+  private playbackFinishedCallback: (() => void) | null = null;
 
   async initialize(): Promise<void> {
     await Audio.setAudioModeAsync({
@@ -19,10 +20,39 @@ class AudioService {
     }
   }
 
+  /**
+   * Set audio mode for recording (enables mic input on iOS).
+   * Must be called before startRecording().
+   */
+  async prepareForRecording(): Promise<void> {
+    await Audio.setAudioModeAsync({
+      allowsRecordingIOS: true,
+      playsInSilentModeIOS: true,
+      staysActiveInBackground: true,
+      shouldDuckAndroid: true,
+    });
+  }
+
+  /**
+   * Set audio mode for playback (routes audio to speaker on iOS, not earpiece).
+   * Must be called before playing audio.
+   */
+  async prepareForPlayback(): Promise<void> {
+    await Audio.setAudioModeAsync({
+      allowsRecordingIOS: false,
+      playsInSilentModeIOS: true,
+      staysActiveInBackground: true,
+      shouldDuckAndroid: true,
+    });
+  }
+
   async startRecording(): Promise<void> {
     if (this.recording) {
       await this.stopRecording();
     }
+
+    // Ensure audio mode is set for recording
+    await this.prepareForRecording();
 
     const { recording } = await Audio.Recording.createAsync({
       android: {
@@ -60,13 +90,18 @@ class AudioService {
     const uri = this.recording.getURI();
     this.recording = null;
 
-    // Reset audio mode for playback
-    await Audio.setAudioModeAsync({
-      allowsRecordingIOS: false,
-      playsInSilentModeIOS: true,
-    });
+    // Switch audio mode for playback (speaker, not earpiece)
+    await this.prepareForPlayback();
 
     return uri;
+  }
+
+  /**
+   * Register a callback for when audio playback finishes.
+   * Used by the PTT flow to transition audioState from 'playing' back to 'idle'.
+   */
+  onPlaybackFinished(callback: () => void): void {
+    this.playbackFinishedCallback = callback;
   }
 
   async playAudioFromBase64(base64Audio: string): Promise<void> {
@@ -74,8 +109,11 @@ class AudioService {
       await this.sound.unloadAsync();
     }
 
+    // Ensure we're in playback mode (speaker, not earpiece)
+    await this.prepareForPlayback();
+
     const { sound } = await Audio.Sound.createAsync(
-      { uri: `data:audio/wav;base64,${base64Audio}` },
+      { uri: `data:audio/pcm;rate=${AUDIO_SAMPLE_RATE};base64,${base64Audio}` },
       { shouldPlay: true },
     );
     this.sound = sound;
@@ -84,6 +122,7 @@ class AudioService {
       if (status.isLoaded && status.didJustFinish) {
         sound.unloadAsync();
         this.sound = null;
+        this.playbackFinishedCallback?.();
       }
     });
   }
@@ -92,6 +131,8 @@ class AudioService {
     if (this.sound) {
       await this.sound.unloadAsync();
     }
+
+    await this.prepareForPlayback();
 
     const { sound } = await Audio.Sound.createAsync(
       { uri },
@@ -103,6 +144,7 @@ class AudioService {
       if (status.isLoaded && status.didJustFinish) {
         sound.unloadAsync();
         this.sound = null;
+        this.playbackFinishedCallback?.();
       }
     });
   }
@@ -120,6 +162,7 @@ class AudioService {
       await this.sound.unloadAsync();
       this.sound = null;
     }
+    this.playbackFinishedCallback = null;
   }
 }
 

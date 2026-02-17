@@ -28,9 +28,16 @@ export function HomeScreen() {
     }
   }, [keepAwake]);
 
+  const setAudioState = useConversationStore((s) => s.setAudioState);
+
   useEffect(() => {
     audioService.initialize().catch((err) => {
       addMessage('system', `Audio init failed: ${err.message}`);
+    });
+
+    // When audio playback finishes, transition back to idle
+    audioService.onPlaybackFinished(() => {
+      setAudioState('idle');
     });
 
     geminiService.onTranscript((text, role) => {
@@ -39,9 +46,25 @@ export function HomeScreen() {
 
     geminiService.onAudioResponse(async (base64Audio) => {
       try {
+        // Transition to 'playing' when we start audio playback
+        setAudioState('playing');
         await audioService.playAudioFromBase64(base64Audio);
+        // Note: the playbackFinished callback above handles -> idle
       } catch (err) {
-        // Silent fail on audio playback
+        addMessage('system', `Audio playback error: ${err}`);
+        setAudioState('idle');
+      }
+    });
+
+    // When Gemini's turn is complete and there was no audio response,
+    // transition back to idle (text-only responses)
+    geminiService.onTurnComplete(() => {
+      // Only reset to idle if we're still in 'processing' state.
+      // If we received audio, state will be 'playing' and the
+      // playback finished callback handles the transition.
+      const currentState = useConversationStore.getState().audioState;
+      if (currentState === 'processing') {
+        setAudioState('idle');
       }
     });
 

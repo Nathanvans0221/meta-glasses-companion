@@ -12,6 +12,7 @@ class GeminiService {
   private config: GeminiConfig | null = null;
   private transcriptCallback: ((text: string, role: 'user' | 'assistant') => void) | null = null;
   private audioCallback: ((base64Audio: string) => void) | null = null;
+  private turnCompleteCallback: (() => void) | null = null;
   private unsubscribeMessage: (() => void) | null = null;
 
   configure(config: GeminiConfig): void {
@@ -105,6 +106,10 @@ class GeminiService {
     this.audioCallback = callback;
   }
 
+  onTurnComplete(callback: () => void): void {
+    this.turnCompleteCallback = callback;
+  }
+
   disconnect(): void {
     this.unsubscribeMessage?.();
     this.unsubscribeMessage = null;
@@ -126,7 +131,7 @@ class GeminiService {
 
     // Handle turn completion
     if (data.serverContent?.turnComplete) {
-      // Turn is complete, ready for next input
+      this.turnCompleteCallback?.();
     }
   }
 }

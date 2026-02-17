@@ -6,9 +6,11 @@ import {
   Animated,
   View,
 } from 'react-native';
+import { File as ExpoFile } from 'expo-file-system';
 import { useConversationStore } from '../stores/conversationStore';
 import { audioService } from '../services/audio';
 import { geminiService } from '../services/gemini';
+import { websocketService } from '../services/websocket';
 import { useTheme } from '../hooks/useTheme';
 
 export function PushToTalkButton() {
@@ -16,10 +18,22 @@ export function PushToTalkButton() {
   const audioState = useConversationStore((s) => s.audioState);
   const setAudioState = useConversationStore((s) => s.setAudioState);
   const addMessage = useConversationStore((s) => s.addMessage);
+  const wsState = useConversationStore((s) => s.wsState);
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const isRecording = audioState === 'recording';
 
   const handlePressIn = useCallback(async () => {
+    // Don't allow recording if not connected to Gemini
+    if (wsState !== 'connected') {
+      addMessage('system', 'Connect to AI first before using voice input.');
+      return;
+    }
+
+    // Don't allow new recording while processing or playing
+    if (audioState === 'processing' || audioState === 'playing') {
+      return;
+    }
+
     Animated.spring(scaleAnim, {
       toValue: 0.92,
       useNativeDriver: true,
@@ -32,9 +46,12 @@ export function PushToTalkButton() {
       addMessage('system', `Recording error: ${err}`);
       setAudioState('idle');
     }
-  }, [scaleAnim, setAudioState, addMessage]);
+  }, [scaleAnim, setAudioState, addMessage, wsState, audioState]);
 
   const handlePressOut = useCallback(async () => {
+    // Only process if we were actually recording
+    if (audioState !== 'recording') return;
+
     Animated.spring(scaleAnim, {
       toValue: 1,
       useNativeDriver: true,
@@ -43,15 +60,27 @@ export function PushToTalkButton() {
     try {
       setAudioState('processing');
       const uri = await audioService.stopRecording();
+
       if (uri) {
+        // Read the recorded audio file as base64 using the new expo-file-system API
+        const audioFile = new ExpoFile(uri);
+        const base64Audio = await audioFile.base64();
+
         addMessage('user', '[Voice message sent]');
+
+        // Send the audio to Gemini via websocket
+        geminiService.sendAudio(base64Audio);
+      } else {
+        setAudioState('idle');
       }
-      setAudioState('idle');
+      // Note: audioState stays 'processing' until Gemini responds.
+      // The HomeScreen's onAudioResponse / onTurnComplete callbacks
+      // will transition the state to 'playing' then 'idle'.
     } catch (err) {
       addMessage('system', `Processing error: ${err}`);
       setAudioState('idle');
     }
-  }, [scaleAnim, setAudioState, addMessage]);
+  }, [scaleAnim, setAudioState, addMessage, audioState]);
 
   const stateLabel =
     audioState === 'recording'
