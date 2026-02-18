@@ -1,6 +1,8 @@
 import React, { useEffect } from 'react';
-import { View, StyleSheet, TextInput, Pressable, Text } from 'react-native';
+import { View, StyleSheet, TextInput, Pressable, Text, KeyboardAvoidingView, Platform } from 'react-native';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
+import * as Haptics from 'expo-haptics';
+import { Ionicons } from '@expo/vector-icons';
 import { ConnectionStatus } from '../components/ConnectionStatus';
 import { PushToTalkButton } from '../components/PushToTalkButton';
 import { TranscriptView } from '../components/TranscriptView';
@@ -10,6 +12,7 @@ import { geminiService } from '../services/gemini';
 import { audioService } from '../services/audio';
 import { websocketService } from '../services/websocket';
 import { useTheme } from '../hooks/useTheme';
+import { SPACING, TYPOGRAPHY, RADIUS, SIZES } from '../design/tokens';
 
 export function HomeScreen() {
   const colors = useTheme();
@@ -35,7 +38,6 @@ export function HomeScreen() {
       addMessage('system', `Audio init failed: ${err.message}`);
     });
 
-    // When audio playback finishes, transition back to idle
     audioService.onPlaybackFinished(() => {
       setAudioState('idle');
     });
@@ -46,22 +48,15 @@ export function HomeScreen() {
 
     geminiService.onAudioResponse(async (base64Audio) => {
       try {
-        // Transition to 'playing' when we start audio playback
         setAudioState('playing');
         await audioService.playAudioFromBase64(base64Audio);
-        // Note: the playbackFinished callback above handles -> idle
       } catch (err) {
         addMessage('system', `Audio playback error: ${err}`);
         setAudioState('idle');
       }
     });
 
-    // When Gemini's turn is complete and there was no audio response,
-    // transition back to idle (text-only responses)
     geminiService.onTurnComplete(() => {
-      // Only reset to idle if we're still in 'processing' state.
-      // If we received audio, state will be 'playing' and the
-      // playback finished callback handles the transition.
       const currentState = useConversationStore.getState().audioState;
       if (currentState === 'processing') {
         setAudioState('idle');
@@ -81,65 +76,98 @@ export function HomeScreen() {
 
   const connectToGemini = async () => {
     if (!apiKey) {
-      addMessage('system', 'Set your Gemini API key in Settings first');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+      addMessage('system', 'Add your Gemini API key in Settings first.');
       return;
     }
 
     try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       addMessage('system', 'Connecting to Gemini...');
       geminiService.configure({ apiKey });
       await geminiService.connect();
-      addMessage('system', 'Connected! Ready for voice input.');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      addMessage('system', 'Connected. Ready for voice input.');
     } catch (err: any) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       addMessage('system', `Connection failed: ${err.message}`);
     }
   };
 
   const sendTextMessage = () => {
     if (!textInput.trim()) return;
+    Haptics.selectionAsync();
     geminiService.sendText(textInput.trim());
+    addMessage('user', textInput.trim());
     setTextInput('');
   };
 
   const wsState = useConversationStore((s) => s.wsState);
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+    <KeyboardAvoidingView
+      style={[styles.container, { backgroundColor: colors.background }]}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={90}
+    >
       <ConnectionStatus />
 
       {wsState !== 'connected' && (
-        <Pressable style={[styles.connectButton, { backgroundColor: colors.highlight }]} onPress={connectToGemini}>
-          <Text style={styles.connectText}>
-            {wsState === 'connecting' ? 'Connecting...' : 'Connect to AI'}
-          </Text>
-        </Pressable>
+        <View style={styles.connectContainer}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.connectButton,
+              { backgroundColor: colors.accent, opacity: pressed ? 0.8 : 1 },
+            ]}
+            onPress={connectToGemini}
+          >
+            <Ionicons
+              name={wsState === 'connecting' ? 'sync' : 'flash'}
+              size={18}
+              color="#FFFFFF"
+            />
+            <Text style={styles.connectText}>
+              {wsState === 'connecting' ? 'Connecting...' : 'Connect to AI'}
+            </Text>
+          </Pressable>
+        </View>
       )}
 
       <TranscriptView />
 
-      <View style={[styles.inputArea, { backgroundColor: colors.surface, borderTopColor: colors.surfaceLight }]}>
+      <View style={[styles.inputArea, { backgroundColor: colors.primary, borderTopColor: colors.separator }]}>
         <PushToTalkButton />
 
         <View style={styles.textInputRow}>
           <TextInput
-            style={[styles.textInput, { backgroundColor: colors.surfaceLight, color: colors.text }]}
+            style={[styles.textInput, { backgroundColor: colors.fill, color: colors.text }]}
             value={textInput}
             onChangeText={setTextInput}
             placeholder="Or type a message..."
-            placeholderTextColor={colors.textSecondary}
+            placeholderTextColor={colors.textTertiary}
             onSubmitEditing={sendTextMessage}
             returnKeyType="send"
           />
           <Pressable
-            style={[styles.sendButton, { backgroundColor: colors.accent }]}
+            style={({ pressed }) => [
+              styles.sendButton,
+              {
+                backgroundColor: textInput.trim() ? colors.accent : colors.fill,
+                opacity: pressed && textInput.trim() ? 0.7 : 1,
+              },
+            ]}
             onPress={sendTextMessage}
             disabled={!textInput.trim()}
           >
-            <Text style={[styles.sendText, { color: '#ffffff' }]}>Send</Text>
+            <Ionicons
+              name="arrow-up"
+              size={20}
+              color={textInput.trim() ? '#FFFFFF' : colors.textTertiary}
+            />
           </Pressable>
         </View>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -147,40 +175,46 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  connectContainer: {
+    paddingHorizontal: SPACING.lg,
+    paddingVertical: SPACING.md,
+  },
   connectButton: {
-    margin: 16,
-    padding: 14,
-    borderRadius: 12,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.sm,
+    height: SIZES.buttonHeight,
+    borderRadius: RADIUS.md,
   },
   connectText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '700',
+    ...TYPOGRAPHY.headline,
+    color: '#FFFFFF',
   },
   inputArea: {
-    padding: 16,
-    paddingBottom: 32,
-    borderTopWidth: 1,
-    gap: 16,
+    paddingTop: SPACING.md,
+    paddingBottom: SPACING['3xl'],
+    paddingHorizontal: SPACING.lg,
+    borderTopWidth: 0.5,
+    gap: SPACING.md,
   },
   textInputRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: SPACING.sm,
+    alignItems: 'center',
   },
   textInput: {
     flex: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 24,
-    fontSize: 14,
+    height: SIZES.inputHeight,
+    paddingHorizontal: SPACING.lg,
+    borderRadius: RADIUS['2xl'],
+    ...TYPOGRAPHY.body,
   },
   sendButton: {
-    paddingHorizontal: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     justifyContent: 'center',
-    borderRadius: 24,
-  },
-  sendText: {
-    fontWeight: '600',
+    alignItems: 'center',
   },
 });

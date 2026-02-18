@@ -12,38 +12,76 @@ export const AUDIO_SAMPLE_RATE = 16000;
 export const AUDIO_CHANNELS = 1;
 export const AUDIO_BIT_DEPTH = 16;
 
-// UI Colors
+// ─── Color Palettes ───────────────────────────────────────────────
+// Inspired by Apple HIG + Silver Fern brand (teal/green)
+
 export const COLORS_DARK = {
-  primary: '#1a1a2e',
-  secondary: '#16213e',
-  accent: '#0f3460',
-  highlight: '#e94560',
-  success: '#00c853',
-  warning: '#ff9800',
-  error: '#f44336',
-  text: '#ffffff',
-  textSecondary: '#a0a0b0',
-  background: '#0a0a1a',
-  surface: '#1a1a2e',
-  surfaceLight: '#252540',
+  // Backgrounds
+  background: '#000000',
+  primary: '#1C1C1E',
+  secondary: '#2C2C2E',
+  surface: '#1C1C1E',
+  surfaceElevated: '#2C2C2E',
+  surfaceLight: '#3A3A3C',
+
+  // Brand
+  accent: '#0A84FF',
+  accentLight: 'rgba(10, 132, 255, 0.15)',
+  tint: '#64D2FF',
+
+  // Text
+  text: '#FFFFFF',
+  textSecondary: '#98989D',
+  textTertiary: '#636366',
+
+  // Semantic
+  success: '#30D158',
+  successLight: 'rgba(48, 209, 88, 0.15)',
+  warning: '#FFD60A',
+  warningLight: 'rgba(255, 214, 10, 0.15)',
+  error: '#FF453A',
+  errorLight: 'rgba(255, 69, 58, 0.15)',
+
+  // Utilities
+  separator: '#38383A',
+  fill: 'rgba(120, 120, 128, 0.36)',
+  overlay: 'rgba(0, 0, 0, 0.4)',
 } as const;
 
 export const COLORS_LIGHT = {
-  primary: '#ffffff',
-  secondary: '#f0f0f5',
-  accent: '#3b82f6',
-  highlight: '#e94560',
-  success: '#16a34a',
-  warning: '#f59e0b',
-  error: '#ef4444',
-  text: '#1a1a2e',
-  textSecondary: '#6b7280',
-  background: '#f5f5fa',
-  surface: '#ffffff',
-  surfaceLight: '#e5e7eb',
+  // Backgrounds
+  background: '#F2F2F7',
+  primary: '#FFFFFF',
+  secondary: '#F2F2F7',
+  surface: '#FFFFFF',
+  surfaceElevated: '#FFFFFF',
+  surfaceLight: '#E5E5EA',
+
+  // Brand
+  accent: '#007AFF',
+  accentLight: 'rgba(0, 122, 255, 0.12)',
+  tint: '#5AC8FA',
+
+  // Text
+  text: '#000000',
+  textSecondary: '#8E8E93',
+  textTertiary: '#AEAEB2',
+
+  // Semantic
+  success: '#34C759',
+  successLight: 'rgba(52, 199, 89, 0.12)',
+  warning: '#FF9500',
+  warningLight: 'rgba(255, 149, 0, 0.12)',
+  error: '#FF3B30',
+  errorLight: 'rgba(255, 59, 48, 0.12)',
+
+  // Utilities
+  separator: '#C6C6C8',
+  fill: 'rgba(120, 120, 128, 0.2)',
+  overlay: 'rgba(0, 0, 0, 0.2)',
 } as const;
 
-// Default export for backward compat — components should use useTheme() instead
+// Default export for backward compat
 export const COLORS = COLORS_DARK;
 
 export type ThemeColors = {

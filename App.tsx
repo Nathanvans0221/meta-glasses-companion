@@ -2,70 +2,81 @@ import React from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Text } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { DevicesScreen } from './src/screens/DevicesScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
 import { useTheme } from './src/hooks/useTheme';
 import { useSettingsStore } from './src/stores/settingsStore';
+import { TYPOGRAPHY, SPACING } from './src/design/tokens';
 
 const Tab = createBottomTabNavigator();
 
-function TabIcon({ label, focused }: { label: string; focused: boolean }) {
-  const icons: Record<string, string> = {
-    Home: '\u{1F3A4}',
-    Devices: '\u{1F50D}',
-    Settings: '\u2699\uFE0F',
-  };
-  return (
-    <Text style={{ fontSize: 20, opacity: focused ? 1 : 0.5 }}>
-      {icons[label] || label}
-    </Text>
-  );
-}
+const TAB_ICONS: Record<string, { active: keyof typeof Ionicons.glyphMap; inactive: keyof typeof Ionicons.glyphMap }> = {
+  Voice: { active: 'mic', inactive: 'mic-outline' },
+  Glasses: { active: 'glasses', inactive: 'glasses-outline' },
+  Settings: { active: 'settings', inactive: 'settings-outline' },
+};
 
 export default function App() {
   const colors = useTheme();
   const darkMode = useSettingsStore((s) => s.darkMode);
 
   return (
-    <NavigationContainer>
-      <StatusBar style={darkMode ? 'light' : 'dark'} />
-      <Tab.Navigator
-        screenOptions={({ route }) => ({
-          headerStyle: {
-            backgroundColor: colors.primary,
-            shadowColor: 'transparent',
-          },
-          headerTintColor: colors.text,
-          headerTitleStyle: { fontWeight: '700' },
-          tabBarStyle: {
-            backgroundColor: colors.primary,
-            borderTopColor: colors.surfaceLight,
-          },
-          tabBarActiveTintColor: colors.highlight,
-          tabBarInactiveTintColor: colors.textSecondary,
-          tabBarIcon: ({ focused }) => (
-            <TabIcon label={route.name} focused={focused} />
-          ),
-        })}
-      >
-        <Tab.Screen
-          name="Home"
-          component={HomeScreen}
-          options={{ title: 'WorkSuite Voice' }}
-        />
-        <Tab.Screen
-          name="Devices"
-          component={DevicesScreen}
-          options={{ title: 'Glasses' }}
-        />
-        <Tab.Screen
-          name="Settings"
-          component={SettingsScreen}
-          options={{ title: 'Settings' }}
-        />
-      </Tab.Navigator>
-    </NavigationContainer>
+    <SafeAreaProvider>
+      <NavigationContainer>
+        <StatusBar style={darkMode ? 'light' : 'dark'} />
+        <Tab.Navigator
+          screenOptions={({ route }) => ({
+            headerStyle: {
+              backgroundColor: colors.primary,
+              borderBottomWidth: 0.5,
+              borderBottomColor: colors.separator,
+              shadowColor: 'transparent',
+              elevation: 0,
+            },
+            headerTintColor: colors.text,
+            headerTitleStyle: {
+              ...TYPOGRAPHY.headline,
+              color: colors.text,
+            },
+            tabBarStyle: {
+              backgroundColor: colors.primary,
+              borderTopWidth: 0.5,
+              borderTopColor: colors.separator,
+              paddingTop: SPACING.xs,
+            },
+            tabBarActiveTintColor: colors.accent,
+            tabBarInactiveTintColor: colors.textTertiary,
+            tabBarLabelStyle: {
+              fontSize: TYPOGRAPHY.caption2.fontSize,
+              fontWeight: '500',
+            },
+            tabBarIcon: ({ focused, color, size }) => {
+              const icons = TAB_ICONS[route.name];
+              const iconName = focused ? icons?.active : icons?.inactive;
+              return <Ionicons name={iconName || 'help-outline'} size={size} color={color} />;
+            },
+          })}
+        >
+          <Tab.Screen
+            name="Voice"
+            component={HomeScreen}
+            options={{ title: 'Voice' }}
+          />
+          <Tab.Screen
+            name="Glasses"
+            component={DevicesScreen}
+            options={{ title: 'Glasses' }}
+          />
+          <Tab.Screen
+            name="Settings"
+            component={SettingsScreen}
+            options={{ title: 'Settings' }}
+          />
+        </Tab.Navigator>
+      </NavigationContainer>
+    </SafeAreaProvider>
   );
 }

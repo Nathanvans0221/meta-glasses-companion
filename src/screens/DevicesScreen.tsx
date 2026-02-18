@@ -1,11 +1,14 @@
-import React, { useCallback } from 'react';
-import { View, Text, FlatList, Pressable, StyleSheet } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { View, Text, FlatList, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import { useBluetoothStore } from '../stores/bluetoothStore';
 import { useConversationStore } from '../stores/conversationStore';
 import { bluetoothService } from '../services/bluetooth';
 import { DeviceCard } from '../components/DeviceCard';
 import type { BleDevice } from '../types';
 import { useTheme } from '../hooks/useTheme';
+import { SPACING, TYPOGRAPHY, RADIUS, SIZES } from '../design/tokens';
 
 export function DevicesScreen() {
   const colors = useTheme();
@@ -21,6 +24,7 @@ export function DevicesScreen() {
 
   const startScan = useCallback(async () => {
     try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       await bluetoothService.waitForPoweredOn();
       clearDevices();
       setBtState('scanning');
@@ -38,11 +42,13 @@ export function DevicesScreen() {
         setBtState(connectedDeviceId ? 'connected' : 'disconnected');
       }, 15000);
     } catch (err: any) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       setError(err.message);
     }
   }, [clearDevices, setBtState, addDevice, setError, addMessage, connectedDeviceId]);
 
   const stopScan = useCallback(() => {
+    Haptics.selectionAsync();
     bluetoothService.stopScan();
     setBtState(connectedDeviceId ? 'connected' : 'disconnected');
   }, [setBtState, connectedDeviceId]);
@@ -50,6 +56,7 @@ export function DevicesScreen() {
   const connectToDevice = useCallback(
     async (device: BleDevice) => {
       try {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         bluetoothService.stopScan();
         setBtState('connecting');
         addMessage('system', `Connecting to ${device.name}...`);
@@ -57,14 +64,17 @@ export function DevicesScreen() {
         await bluetoothService.connectToDevice(device.id);
         setConnectedDevice(device.id);
         setBtState('connected');
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         addMessage('system', `Connected to ${device.name}`);
 
-        bluetoothService.onDeviceDisconnected((deviceId) => {
+        bluetoothService.onDeviceDisconnected(() => {
           setConnectedDevice(null);
           setBtState('disconnected');
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
           addMessage('system', `Disconnected from ${device.name}`);
         });
       } catch (err: any) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         setError(err.message);
         addMessage('system', `Failed to connect: ${err.message}`);
       }
@@ -74,6 +84,7 @@ export function DevicesScreen() {
 
   const disconnect = useCallback(async () => {
     try {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       await bluetoothService.disconnect();
       setConnectedDevice(null);
       setBtState('disconnected');
@@ -83,35 +94,55 @@ export function DevicesScreen() {
     }
   }, [setConnectedDevice, setBtState, setError, addMessage]);
 
+  const isScanning = btState === 'scanning';
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={styles.header}>
-        <Text style={[styles.title, { color: colors.text }]}>Meta Ray-Ban Glasses</Text>
+      {/* Header Card */}
+      <View style={[styles.headerCard, { backgroundColor: colors.surface }]}>
+        <View style={[styles.glassesIcon, { backgroundColor: colors.accentLight }]}>
+          <Ionicons name="glasses" size={28} color={colors.accent} />
+        </View>
+        <Text style={[styles.title, { color: colors.text }]}>Meta Ray-Ban</Text>
         <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-          {btState === 'scanning'
-            ? `Scanning... (${devices.length} found)`
-            : connectedDeviceId
-              ? 'Connected'
-              : 'Not connected'}
+          {connectedDeviceId
+            ? 'Your glasses are connected'
+            : isScanning
+              ? `Scanning nearby devices (${devices.length} found)`
+              : 'Pair your glasses to get started'}
         </Text>
+
+        {/* Action Button */}
+        <Pressable
+          style={({ pressed }) => [
+            styles.actionButton,
+            {
+              backgroundColor: connectedDeviceId ? colors.errorLight : colors.accent,
+              opacity: pressed ? 0.8 : 1,
+            },
+          ]}
+          onPress={connectedDeviceId ? disconnect : isScanning ? stopScan : startScan}
+        >
+          {isScanning && <ActivityIndicator size="small" color={colors.accent} />}
+          {!isScanning && (
+            <Ionicons
+              name={connectedDeviceId ? 'close-circle' : 'search'}
+              size={18}
+              color={connectedDeviceId ? colors.error : '#FFFFFF'}
+            />
+          )}
+          <Text
+            style={[
+              styles.actionText,
+              { color: connectedDeviceId ? colors.error : '#FFFFFF' },
+            ]}
+          >
+            {connectedDeviceId ? 'Disconnect' : isScanning ? 'Stop Scanning' : 'Scan for Glasses'}
+          </Text>
+        </Pressable>
       </View>
 
-      <View style={styles.actions}>
-        {connectedDeviceId ? (
-          <Pressable style={[styles.button, { backgroundColor: colors.error }]} onPress={disconnect}>
-            <Text style={styles.buttonText}>Disconnect</Text>
-          </Pressable>
-        ) : btState === 'scanning' ? (
-          <Pressable style={[styles.button, { backgroundColor: colors.accent }]} onPress={stopScan}>
-            <Text style={styles.buttonText}>Stop Scan</Text>
-          </Pressable>
-        ) : (
-          <Pressable style={[styles.button, { backgroundColor: colors.accent }]} onPress={startScan}>
-            <Text style={styles.buttonText}>Scan for Glasses</Text>
-          </Pressable>
-        )}
-      </View>
-
+      {/* Device List */}
       <FlatList
         data={devices}
         keyExtractor={(item) => item.id}
@@ -123,13 +154,21 @@ export function DevicesScreen() {
           />
         )}
         contentContainerStyle={styles.list}
-        ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
+        ItemSeparatorComponent={() => <View style={{ height: SPACING.sm }} />}
         ListEmptyComponent={
           <View style={styles.empty}>
-            <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
-              {btState === 'scanning'
-                ? 'Searching for Meta Ray-Ban glasses...'
-                : 'Tap "Scan for Glasses" to find nearby devices'}
+            <Ionicons
+              name={isScanning ? 'radio-outline' : 'bluetooth-outline'}
+              size={40}
+              color={colors.textTertiary}
+            />
+            <Text style={[styles.emptyTitle, { color: colors.textSecondary }]}>
+              {isScanning ? 'Looking for glasses...' : 'No devices found'}
+            </Text>
+            <Text style={[styles.emptyHint, { color: colors.textTertiary }]}>
+              {isScanning
+                ? 'Make sure your glasses are powered on and nearby'
+                : 'Tap "Scan for Glasses" to search for nearby devices'}
             </Text>
           </View>
         }
@@ -142,41 +181,60 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  header: {
-    padding: 20,
-    paddingTop: 8,
-    gap: 4,
+  headerCard: {
+    marginHorizontal: SPACING.lg,
+    marginTop: SPACING.lg,
+    marginBottom: SPACING.sm,
+    padding: SPACING.xl,
+    borderRadius: RADIUS.lg,
+    alignItems: 'center',
+    gap: SPACING.sm,
+  },
+  glassesIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: SPACING.xs,
   },
   title: {
-    fontSize: 22,
-    fontWeight: '700',
+    ...TYPOGRAPHY.title2,
   },
   subtitle: {
-    fontSize: 14,
+    ...TYPOGRAPHY.subheadline,
+    textAlign: 'center',
   },
-  actions: {
-    paddingHorizontal: 20,
-    paddingBottom: 16,
-  },
-  button: {
-    padding: 14,
-    borderRadius: 12,
+  actionButton: {
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.sm,
+    height: SIZES.buttonHeight,
+    width: '100%',
+    borderRadius: RADIUS.md,
+    marginTop: SPACING.sm,
   },
-  buttonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
+  actionText: {
+    ...TYPOGRAPHY.headline,
   },
   list: {
-    paddingHorizontal: 20,
+    paddingHorizontal: SPACING.lg,
+    paddingTop: SPACING.sm,
+    paddingBottom: SPACING['3xl'],
   },
   empty: {
-    padding: 40,
     alignItems: 'center',
+    paddingVertical: SPACING['4xl'],
+    gap: SPACING.sm,
   },
-  emptyText: {
-    fontSize: 14,
+  emptyTitle: {
+    ...TYPOGRAPHY.headline,
+    marginTop: SPACING.sm,
+  },
+  emptyHint: {
+    ...TYPOGRAPHY.subheadline,
     textAlign: 'center',
+    paddingHorizontal: SPACING['3xl'],
   },
 });
