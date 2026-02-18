@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
-import Constants from 'expo-constants';
+import { APP_VERSION } from '../constants';
 import { useSettingsStore } from '../stores/settingsStore';
 import { useConversationStore } from '../stores/conversationStore';
 import { useTheme } from '../hooks/useTheme';
@@ -273,7 +273,7 @@ export function SettingsScreen() {
       {/* Footer */}
       <View style={styles.footer}>
         <Text style={[styles.footerText, { color: colors.textTertiary }]}>
-          WorkSuite Voice v{Constants.expoConfig?.version ?? '?.?.?'}
+          WorkSuite Voice v{APP_VERSION}
         </Text>
         <Text style={[styles.footerText, { color: colors.textTertiary }]}>
           Silver Fern Engineering

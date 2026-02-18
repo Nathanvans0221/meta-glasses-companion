@@ -3,6 +3,9 @@
 export const META_GLASSES_SERVICE_UUID = '0000180d-0000-1000-8000-00805f9b34fb';
 export const META_GLASSES_NAME_PREFIX = 'Ray-Ban';
 
+// App version — lives in JS so OTA updates reflect it immediately
+export const APP_VERSION = '1.1.0';
+
 // Gemini Live API
 export const GEMINI_WS_BASE = 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent';
 export const GEMINI_DEFAULT_MODEL = 'gemini-2.0-flash-exp';
