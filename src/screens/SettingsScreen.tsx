@@ -179,7 +179,7 @@ export function SettingsScreen() {
           style={styles.linkRow}
           onPress={() => Linking.openURL('https://aistudio.google.com/apikey')}
         >
-          <View style={[rowStyles.iconBox, { backgroundColor: '#007AFF' }]}>
+          <View style={[rowStyles.iconBox, { backgroundColor: '#1A93AE' }]}>
             <Ionicons name="open-outline" size={16} color="#FFFFFF" />
           </View>
           <Text style={[styles.linkText, { color: colors.accent }]}>

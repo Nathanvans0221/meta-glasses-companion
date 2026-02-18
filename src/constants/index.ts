@@ -13,7 +13,9 @@ export const AUDIO_CHANNELS = 1;
 export const AUDIO_BIT_DEPTH = 16;
 
 // ─── Color Palettes ───────────────────────────────────────────────
-// Inspired by Apple HIG + Silver Fern brand (teal/green)
+// Apple HIG structure + WorkSuite/Silver Fern brand colors
+// WorkSuite palette: sage green #69936C, teal #1A93AE, blue #2196F3
+// Accent teal bridges WorkSuite identity with Apple polish
 
 export const COLORS_DARK = {
   // Backgrounds
@@ -24,23 +26,23 @@ export const COLORS_DARK = {
   surfaceElevated: '#2C2C2E',
   surfaceLight: '#3A3A3C',
 
-  // Brand
-  accent: '#0A84FF',
-  accentLight: 'rgba(10, 132, 255, 0.15)',
-  tint: '#64D2FF',
+  // Brand — WorkSuite teal as primary accent
+  accent: '#1A93AE',
+  accentLight: 'rgba(26, 147, 174, 0.18)',
+  tint: '#90C4D3',
 
   // Text
-  text: '#FFFFFF',
-  textSecondary: '#98989D',
-  textTertiary: '#636366',
+  text: '#DDDDDD',
+  textSecondary: '#AAAAAA',
+  textTertiary: '#777777',
 
-  // Semantic
-  success: '#30D158',
-  successLight: 'rgba(48, 209, 88, 0.15)',
+  // Semantic — WorkSuite accent colors
+  success: '#4CAF50',
+  successLight: 'rgba(76, 175, 80, 0.18)',
   warning: '#FFD60A',
   warningLight: 'rgba(255, 214, 10, 0.15)',
-  error: '#FF453A',
-  errorLight: 'rgba(255, 69, 58, 0.15)',
+  error: '#F44336',
+  errorLight: 'rgba(244, 67, 54, 0.18)',
 
   // Utilities
   separator: '#38383A',
@@ -57,23 +59,23 @@ export const COLORS_LIGHT = {
   surfaceElevated: '#FFFFFF',
   surfaceLight: '#E5E5EA',
 
-  // Brand
-  accent: '#007AFF',
-  accentLight: 'rgba(0, 122, 255, 0.12)',
-  tint: '#5AC8FA',
+  // Brand — WorkSuite teal as primary accent
+  accent: '#1A93AE',
+  accentLight: 'rgba(26, 147, 174, 0.10)',
+  tint: '#90C4D3',
 
-  // Text
-  text: '#000000',
-  textSecondary: '#8E8E93',
-  textTertiary: '#AEAEB2',
+  // Text — WorkSuite text values
+  text: '#333333',
+  textSecondary: '#555555',
+  textTertiary: '#888888',
 
-  // Semantic
-  success: '#34C759',
-  successLight: 'rgba(52, 199, 89, 0.12)',
+  // Semantic — WorkSuite accent colors
+  success: '#66BB6A',
+  successLight: 'rgba(102, 187, 106, 0.12)',
   warning: '#FF9500',
   warningLight: 'rgba(255, 149, 0, 0.12)',
-  error: '#FF3B30',
-  errorLight: 'rgba(255, 59, 48, 0.12)',
+  error: '#EF5350',
+  errorLight: 'rgba(239, 83, 80, 0.12)',
 
   // Utilities
   separator: '#C6C6C8',
