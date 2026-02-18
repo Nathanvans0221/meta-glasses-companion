@@ -24,8 +24,9 @@ class GeminiService {
       throw new Error('Gemini API key not configured');
     }
 
-    const model = this.config.model || GEMINI_DEFAULT_MODEL;
-    const url = `${GEMINI_WS_BASE}?key=${this.config.apiKey}`;
+    const config = this.config;
+    const model = config.model || GEMINI_DEFAULT_MODEL;
+    const url = `${GEMINI_WS_BASE}?key=${config.apiKey}`;
 
     // Listen for incoming messages
     this.unsubscribeMessage = websocketService.onMessage((data) => {
@@ -35,7 +36,7 @@ class GeminiService {
     // Disable auto-reconnect — we handle reconnection at the UI level
     websocketService.connect(url, false);
 
-    // Wait for connection, then send setup
+    // Wait for WebSocket connection
     await new Promise<void>((resolve, reject) => {
       const timeout = setTimeout(() => reject(new Error('Connection timeout')), 15000);
       const unsub = websocketService.onStateChange((state) => {
@@ -51,31 +52,59 @@ class GeminiService {
       });
     });
 
-    // Send setup message
-    websocketService.send({
-      setup: {
-        model: `models/${model}`,
-        generation_config: {
-          response_modalities: ['AUDIO', 'TEXT'],
-          speech_config: {
-            voice_config: {
-              prebuilt_voice_config: {
-                voice_name: 'Aoede',
+    // Send setup message and wait for setupComplete before resolving
+    await new Promise<void>((resolve, reject) => {
+      const setupTimeout = setTimeout(() => {
+        unsubMsg();
+        unsubState();
+        reject(new Error('Setup timeout — Gemini did not acknowledge config'));
+      }, 10000);
+
+      // Listen for setupComplete from Gemini
+      const unsubMsg = websocketService.onMessage((data) => {
+        if (data.setupComplete) {
+          clearTimeout(setupTimeout);
+          unsubMsg();
+          unsubState();
+          resolve();
+        }
+      });
+
+      // If the connection drops during setup, reject
+      const unsubState = websocketService.onStateChange((state) => {
+        if (state === 'disconnected' || state === 'error') {
+          clearTimeout(setupTimeout);
+          unsubMsg();
+          unsubState();
+          reject(new Error('Connection lost during setup — check API key and model'));
+        }
+      });
+
+      websocketService.send({
+        setup: {
+          model: `models/${model}`,
+          generation_config: {
+            response_modalities: ['AUDIO', 'TEXT'],
+            speech_config: {
+              voice_config: {
+                prebuilt_voice_config: {
+                  voice_name: 'Aoede',
+                },
               },
             },
           },
+          system_instruction: {
+            parts: [
+              {
+                text: config.systemInstruction ||
+                  'You are a helpful voice assistant for field workers using Meta Ray-Ban smart glasses. ' +
+                  'Keep responses concise and actionable. You help with inventory, task management, ' +
+                  'and work order operations through the WorkSuite system.',
+              },
+            ],
+          },
         },
-        system_instruction: {
-          parts: [
-            {
-              text: this.config.systemInstruction ||
-                'You are a helpful voice assistant for field workers using Meta Ray-Ban smart glasses. ' +
-                'Keep responses concise and actionable. You help with inventory, task management, ' +
-                'and work order operations through the WorkSuite system.',
-            },
-          ],
-        },
-      },
+      });
     });
   }
 

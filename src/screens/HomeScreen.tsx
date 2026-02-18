@@ -21,6 +21,7 @@ export function HomeScreen() {
   const setSessionActive = useConversationStore((s) => s.setSessionActive);
   const keepAwake = useSettingsStore((s) => s.keepAwake);
   const apiKey = useSettingsStore((s) => s.geminiApiKey);
+  const geminiModel = useSettingsStore((s) => s.geminiModel);
   const [textInput, setTextInput] = React.useState('');
 
   useEffect(() => {
@@ -84,7 +85,7 @@ export function HomeScreen() {
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       addMessage('system', 'Connecting to Gemini...');
-      geminiService.configure({ apiKey });
+      geminiService.configure({ apiKey, model: geminiModel });
       await geminiService.connect();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       addMessage('system', 'Connected. Ready for voice input.');

@@ -5,7 +5,7 @@ export const META_GLASSES_NAME_PREFIX = 'Ray-Ban';
 
 // Gemini Live API
 export const GEMINI_WS_BASE = 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent';
-export const GEMINI_DEFAULT_MODEL = 'gemini-2.0-flash-live-001';
+export const GEMINI_DEFAULT_MODEL = 'gemini-2.0-flash-exp';
 
 // Audio settings
 export const AUDIO_SAMPLE_RATE = 16000;
