@@ -24,7 +24,22 @@ class WebSocketService {
 
     this.ws.onmessage = (event) => {
       try {
-        const raw = typeof event.data === 'string' ? event.data : String(event.data);
+        let raw = event.data;
+
+        // React Native WebSocket may deliver messages as ArrayBuffer
+        if (raw instanceof ArrayBuffer) {
+          const bytes = new Uint8Array(raw);
+          raw = '';
+          // Decode UTF-8 bytes to string in chunks to avoid stack overflow
+          const chunkSize = 8192;
+          for (let i = 0; i < bytes.length; i += chunkSize) {
+            const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
+            raw += String.fromCharCode.apply(null, Array.from(chunk));
+          }
+        } else if (typeof raw !== 'string') {
+          raw = String(raw);
+        }
+
         const data = JSON.parse(raw);
         this.messageHandlers.forEach((handler) => handler(data));
       } catch {
