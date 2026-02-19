@@ -8,13 +8,6 @@ export interface GeminiConfig {
   systemInstruction?: string;
 }
 
-// Send a lightweight message every 15s to prevent Gemini idle timeout
-const KEEPALIVE_INTERVAL_MS = 15_000;
-
-// 10ms of silence at 16kHz, 16-bit mono PCM = 320 bytes of zeros, base64-encoded
-// This is the smallest meaningful audio chunk we can send as a keepalive
-const SILENT_AUDIO_CHUNK = 'A'.repeat(427) + '=';
-
 class GeminiService {
   private config: GeminiConfig | null = null;
   private transcriptCallback: ((text: string, role: 'user' | 'assistant') => void) | null = null;
@@ -23,7 +16,9 @@ class GeminiService {
   private disconnectCallback: ((detail?: string) => void) | null = null;
   private unsubscribeMessage: (() => void) | null = null;
   private unsubscribeState: (() => void) | null = null;
-  private keepaliveTimer: ReturnType<typeof setInterval> | null = null;
+
+  // Session resumption — Gemini sends us tokens to resume after disconnect
+  private resumptionHandle: string | null = null;
 
   configure(config: GeminiConfig): void {
     this.config = config;
@@ -47,7 +42,7 @@ class GeminiService {
       this.handleServerMessage(data);
     });
 
-    // Disable auto-reconnect — we handle reconnection at the UI level
+    // Disable auto-reconnect — we handle reconnection ourselves
     websocketService.connect(url, false);
 
     // Wait for WebSocket connection
@@ -66,7 +61,46 @@ class GeminiService {
       });
     });
 
-    // Send setup message and wait for setupComplete before resolving
+    // Build setup message
+    const setupMsg: any = {
+      setup: {
+        model: `models/${model}`,
+        generationConfig: {
+          responseModalities: ['AUDIO'],
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: {
+                voiceName: 'Kore',
+              },
+            },
+          },
+        },
+        systemInstruction: {
+          parts: [
+            {
+              text: config.systemInstruction ||
+                'You are a helpful voice assistant for field workers using Meta Ray-Ban smart glasses. ' +
+                'Keep responses concise and actionable. You help with inventory, task management, ' +
+                'and work order operations through the WorkSuite system.',
+            },
+          ],
+        },
+        // Enable session resumption — server sends tokens we can use to
+        // seamlessly reconnect without losing conversation context
+        sessionResumption: this.resumptionHandle
+          ? { handle: this.resumptionHandle }
+          : {},
+        // Enable context window compression so sessions can exceed 10 min
+        contextWindowCompression: {
+          slidingWindow: {
+            targetTokens: 10000,
+          },
+          triggerTokens: 16000,
+        },
+      },
+    };
+
+    // Send setup message and wait for setupComplete
     await new Promise<void>((resolve, reject) => {
       const setupTimeout = setTimeout(() => {
         unsubMsg();
@@ -74,7 +108,6 @@ class GeminiService {
         reject(new Error('Setup timeout — Gemini did not acknowledge config'));
       }, 10000);
 
-      // Listen for setupComplete from Gemini
       const unsubMsg = websocketService.onMessage((data) => {
         if (data.setupComplete) {
           clearTimeout(setupTimeout);
@@ -84,7 +117,6 @@ class GeminiService {
         }
       });
 
-      // If the connection drops during setup, reject with details
       const unsubState = websocketService.onStateChange((state, detail) => {
         if (state === 'disconnected' || state === 'error') {
           clearTimeout(setupTimeout);
@@ -95,35 +127,10 @@ class GeminiService {
         }
       });
 
-      websocketService.send({
-        setup: {
-          model: `models/${model}`,
-          generationConfig: {
-            responseModalities: ['AUDIO'],
-            speechConfig: {
-              voiceConfig: {
-                prebuiltVoiceConfig: {
-                  voiceName: 'Kore',
-                },
-              },
-            },
-          },
-          systemInstruction: {
-            parts: [
-              {
-                text: config.systemInstruction ||
-                  'You are a helpful voice assistant for field workers using Meta Ray-Ban smart glasses. ' +
-                  'Keep responses concise and actionable. You help with inventory, task management, ' +
-                  'and work order operations through the WorkSuite system.',
-              },
-            ],
-          },
-        },
-      });
+      websocketService.send(setupMsg);
     });
 
-    // Connection established — start keepalive pings and monitor for disconnects
-    this.startKeepalive();
+    // Connection established — monitor for disconnects
     this.monitorConnection();
   }
 
@@ -164,6 +171,7 @@ class GeminiService {
 
   disconnect(): void {
     this.cleanupConnection();
+    this.resumptionHandle = null;
     websocketService.disconnect();
   }
 
@@ -172,11 +180,10 @@ class GeminiService {
   }
 
   /**
-   * Clean up all handlers and timers without closing the WebSocket.
-   * Called before reconnect and on full disconnect.
+   * Clean up handlers without closing the WebSocket.
+   * Preserves resumptionHandle so we can resume the session on reconnect.
    */
   private cleanupConnection(): void {
-    this.stopKeepalive();
     this.unsubscribeMessage?.();
     this.unsubscribeMessage = null;
     this.unsubscribeState?.();
@@ -184,41 +191,8 @@ class GeminiService {
   }
 
   /**
-   * Send periodic keepalive pings to prevent Gemini's idle timeout.
-   * Sends a tiny silent audio chunk via realtimeInput — the natural
-   * "I'm still here" signal for a bidirectional audio stream.
-   * (Empty clientContent causes "Stream end encountered" — don't use that.)
-   */
-  private startKeepalive(): void {
-    this.stopKeepalive();
-    this.keepaliveTimer = setInterval(() => {
-      if (websocketService.isConnected()) {
-        // 10ms of silence at 16kHz 16-bit mono = 320 bytes of zeros
-        // Base64-encoded: 320 zero bytes → ~428 chars of 'A's
-        websocketService.send({
-          realtimeInput: {
-            mediaChunks: [
-              {
-                mimeType: 'audio/pcm;rate=16000',
-                data: SILENT_AUDIO_CHUNK,
-              },
-            ],
-          },
-        });
-      }
-    }, KEEPALIVE_INTERVAL_MS);
-  }
-
-  private stopKeepalive(): void {
-    if (this.keepaliveTimer) {
-      clearInterval(this.keepaliveTimer);
-      this.keepaliveTimer = null;
-    }
-  }
-
-  /**
-   * Monitor the WebSocket for unexpected disconnects after setup is complete.
-   * Fires the onDisconnect callback so the UI can show a message / offer reconnect.
+   * Monitor the WebSocket for unexpected disconnects after setup.
+   * Fires the onDisconnect callback so the UI can auto-reconnect.
    */
   private monitorConnection(): void {
     this.unsubscribeState?.();
@@ -241,6 +215,24 @@ class GeminiService {
     if (data.error) {
       const errMsg = data.error.message || JSON.stringify(data.error);
       this.transcriptCallback?.(`Error: ${errMsg}`, 'assistant');
+      return;
+    }
+
+    // Save session resumption tokens — used to seamlessly reconnect
+    if (data.sessionResumptionUpdate) {
+      if (data.sessionResumptionUpdate.newHandle) {
+        this.resumptionHandle = data.sessionResumptionUpdate.newHandle;
+      }
+    }
+
+    // Handle GoAway — server is about to disconnect, reconnect proactively
+    if (data.goAway) {
+      this.transcriptCallback?.('Session expiring, reconnecting...', 'assistant');
+      // Don't wait — trigger disconnect callback so UI auto-reconnects
+      // The resumptionHandle is already saved, so reconnect will resume seamlessly
+      this.cleanupConnection();
+      websocketService.disconnect();
+      this.disconnectCallback?.('GoAway: session expiring');
       return;
     }
 

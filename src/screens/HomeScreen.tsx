@@ -14,8 +14,8 @@ import { websocketService } from '../services/websocket';
 import { useTheme } from '../hooks/useTheme';
 import { SPACING, TYPOGRAPHY, RADIUS, SIZES } from '../design/tokens';
 
-const MAX_AUTO_RECONNECT_ATTEMPTS = 3;
-const AUTO_RECONNECT_DELAY_MS = 2000;
+const MAX_AUTO_RECONNECT_ATTEMPTS = 5;
+const AUTO_RECONNECT_DELAY_MS = 1500;
 
 export function HomeScreen() {
   const colors = useTheme();
@@ -51,22 +51,23 @@ export function HomeScreen() {
     try {
       if (!isAutoReconnect) {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        addMessage('system', `Connecting to Gemini (${geminiModel})...`);
       }
-      addMessage('system', isAutoReconnect
-        ? `Reconnecting to Gemini (attempt ${reconnectAttempts.current})...`
-        : `Connecting to Gemini (${geminiModel})...`);
       geminiService.configure({ apiKey, model: geminiModel });
       await geminiService.connect();
+      const wasReconnect = reconnectAttempts.current > 0;
       reconnectAttempts.current = 0;
       if (!isAutoReconnect) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
-      addMessage('system', 'Connected. Ready for voice input.');
+      addMessage('system', wasReconnect ? 'Reconnected.' : 'Connected. Ready for voice input.');
     } catch (err: any) {
       if (!isAutoReconnect) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+        addMessage('system', `Connection failed: ${err.message}`);
       }
-      addMessage('system', `Connection failed: ${err.message}`);
+      // Auto-reconnect failures are handled silently — the onDisconnect
+      // handler will retry or show the final failure message
     }
   }, [apiKey, geminiModel, addMessage]);
 
@@ -97,19 +98,22 @@ export function HomeScreen() {
       }
     });
 
-    // Handle unexpected disconnects — auto-reconnect up to MAX attempts
+    // Handle unexpected disconnects — auto-reconnect with session resumption
     geminiService.onDisconnect((detail) => {
-      addMessage('system', `Disconnected from Gemini${detail ? ` (${detail})` : ''}`);
       setWsState('disconnected');
       setSessionActive(false);
 
       if (reconnectAttempts.current < MAX_AUTO_RECONNECT_ATTEMPTS) {
+        // Only show message on first disconnect, keep retries quiet
+        if (reconnectAttempts.current === 0) {
+          addMessage('system', 'Connection lost, reconnecting...');
+        }
         reconnectAttempts.current += 1;
         reconnectTimer.current = setTimeout(() => {
           connectToGemini(true);
         }, AUTO_RECONNECT_DELAY_MS);
       } else {
-        addMessage('system', 'Auto-reconnect failed. Tap "Connect to AI" to try again.');
+        addMessage('system', 'Connection lost. Tap "Connect to AI" to reconnect.');
         reconnectAttempts.current = 0;
       }
     });
