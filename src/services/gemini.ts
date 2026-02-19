@@ -8,12 +8,18 @@ export interface GeminiConfig {
   systemInstruction?: string;
 }
 
+// Send a lightweight message every 15s to prevent Gemini idle timeout
+const KEEPALIVE_INTERVAL_MS = 15_000;
+
 class GeminiService {
   private config: GeminiConfig | null = null;
   private transcriptCallback: ((text: string, role: 'user' | 'assistant') => void) | null = null;
   private audioCallback: ((base64Audio: string) => void) | null = null;
   private turnCompleteCallback: (() => void) | null = null;
+  private disconnectCallback: ((detail?: string) => void) | null = null;
   private unsubscribeMessage: (() => void) | null = null;
+  private unsubscribeState: (() => void) | null = null;
+  private keepaliveTimer: ReturnType<typeof setInterval> | null = null;
 
   configure(config: GeminiConfig): void {
     this.config = config;
@@ -23,6 +29,9 @@ class GeminiService {
     if (!this.config?.apiKey) {
       throw new Error('Gemini API key not configured');
     }
+
+    // Clean up any existing connection before reconnecting
+    this.cleanupConnection();
 
     const config = this.config;
     const model = config.model || GEMINI_DEFAULT_MODEL;
@@ -108,6 +117,10 @@ class GeminiService {
         },
       });
     });
+
+    // Connection established — start keepalive pings and monitor for disconnects
+    this.startKeepalive();
+    this.monitorConnection();
   }
 
   sendAudio(base64Audio: string): void {
@@ -141,10 +154,70 @@ class GeminiService {
     this.turnCompleteCallback = callback;
   }
 
+  onDisconnect(callback: (detail?: string) => void): void {
+    this.disconnectCallback = callback;
+  }
+
   disconnect(): void {
+    this.cleanupConnection();
+    websocketService.disconnect();
+  }
+
+  isConnected(): boolean {
+    return websocketService.isConnected();
+  }
+
+  /**
+   * Clean up all handlers and timers without closing the WebSocket.
+   * Called before reconnect and on full disconnect.
+   */
+  private cleanupConnection(): void {
+    this.stopKeepalive();
     this.unsubscribeMessage?.();
     this.unsubscribeMessage = null;
-    websocketService.disconnect();
+    this.unsubscribeState?.();
+    this.unsubscribeState = null;
+  }
+
+  /**
+   * Send periodic keepalive pings to prevent Gemini's idle timeout.
+   * Uses an empty client content message which Gemini accepts without error.
+   */
+  private startKeepalive(): void {
+    this.stopKeepalive();
+    this.keepaliveTimer = setInterval(() => {
+      if (websocketService.isConnected()) {
+        // Send a minimal client message that Gemini will accept as activity
+        // An empty realtime input with no chunks acts as a ping
+        websocketService.send({
+          clientContent: {
+            turns: [],
+            turnComplete: false,
+          },
+        });
+      }
+    }, KEEPALIVE_INTERVAL_MS);
+  }
+
+  private stopKeepalive(): void {
+    if (this.keepaliveTimer) {
+      clearInterval(this.keepaliveTimer);
+      this.keepaliveTimer = null;
+    }
+  }
+
+  /**
+   * Monitor the WebSocket for unexpected disconnects after setup is complete.
+   * Fires the onDisconnect callback so the UI can show a message / offer reconnect.
+   */
+  private monitorConnection(): void {
+    this.unsubscribeState?.();
+    this.unsubscribeState = websocketService.onStateChange((state, detail) => {
+      if (state === 'disconnected' || state === 'error') {
+        this.cleanupConnection();
+        this.disconnectCallback?.(detail);
+      }
+    });
   }
 
   private handleServerMessage(data: any): void {

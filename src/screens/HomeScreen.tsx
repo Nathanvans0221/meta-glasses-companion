@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef, useCallback } from 'react';
 import { View, StyleSheet, TextInput, Pressable, Text, KeyboardAvoidingView, Platform } from 'react-native';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import * as Haptics from 'expo-haptics';
@@ -14,6 +14,9 @@ import { websocketService } from '../services/websocket';
 import { useTheme } from '../hooks/useTheme';
 import { SPACING, TYPOGRAPHY, RADIUS, SIZES } from '../design/tokens';
 
+const MAX_AUTO_RECONNECT_ATTEMPTS = 3;
+const AUTO_RECONNECT_DELAY_MS = 2000;
+
 export function HomeScreen() {
   const colors = useTheme();
   const addMessage = useConversationStore((s) => s.addMessage);
@@ -23,6 +26,8 @@ export function HomeScreen() {
   const apiKey = useSettingsStore((s) => s.geminiApiKey);
   const geminiModel = useSettingsStore((s) => s.geminiModel);
   const [textInput, setTextInput] = React.useState('');
+  const reconnectAttempts = useRef(0);
+  const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (keepAwake) {
@@ -33,6 +38,37 @@ export function HomeScreen() {
   }, [keepAwake]);
 
   const setAudioState = useConversationStore((s) => s.setAudioState);
+
+  const connectToGemini = useCallback(async (isAutoReconnect = false) => {
+    if (!apiKey) {
+      if (!isAutoReconnect) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+        addMessage('system', 'Add your Gemini API key in Settings first.');
+      }
+      return;
+    }
+
+    try {
+      if (!isAutoReconnect) {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      }
+      addMessage('system', isAutoReconnect
+        ? `Reconnecting to Gemini (attempt ${reconnectAttempts.current})...`
+        : `Connecting to Gemini (${geminiModel})...`);
+      geminiService.configure({ apiKey, model: geminiModel });
+      await geminiService.connect();
+      reconnectAttempts.current = 0;
+      if (!isAutoReconnect) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+      addMessage('system', 'Connected. Ready for voice input.');
+    } catch (err: any) {
+      if (!isAutoReconnect) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      }
+      addMessage('system', `Connection failed: ${err.message}`);
+    }
+  }, [apiKey, geminiModel, addMessage]);
 
   useEffect(() => {
     audioService.initialize().catch((err) => {
@@ -48,7 +84,6 @@ export function HomeScreen() {
     });
 
     geminiService.onAudioResponse((base64Audio) => {
-      // Accumulate audio chunks — play when turn completes
       audioService.addAudioChunk(base64Audio);
     });
 
@@ -62,6 +97,23 @@ export function HomeScreen() {
       }
     });
 
+    // Handle unexpected disconnects — auto-reconnect up to MAX attempts
+    geminiService.onDisconnect((detail) => {
+      addMessage('system', `Disconnected from Gemini${detail ? ` (${detail})` : ''}`);
+      setWsState('disconnected');
+      setSessionActive(false);
+
+      if (reconnectAttempts.current < MAX_AUTO_RECONNECT_ATTEMPTS) {
+        reconnectAttempts.current += 1;
+        reconnectTimer.current = setTimeout(() => {
+          connectToGemini(true);
+        }, AUTO_RECONNECT_DELAY_MS);
+      } else {
+        addMessage('system', 'Auto-reconnect failed. Tap "Connect to AI" to try again.');
+        reconnectAttempts.current = 0;
+      }
+    });
+
     const unsub = websocketService.onStateChange((state) => {
       setWsState(state as any);
       setSessionActive(state === 'connected');
@@ -70,27 +122,20 @@ export function HomeScreen() {
     return () => {
       unsub();
       audioService.cleanup();
+      geminiService.disconnect();
+      if (reconnectTimer.current) {
+        clearTimeout(reconnectTimer.current);
+      }
     };
   }, []);
 
-  const connectToGemini = async () => {
-    if (!apiKey) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      addMessage('system', 'Add your Gemini API key in Settings first.');
-      return;
+  const handleConnect = () => {
+    reconnectAttempts.current = 0;
+    if (reconnectTimer.current) {
+      clearTimeout(reconnectTimer.current);
+      reconnectTimer.current = null;
     }
-
-    try {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      addMessage('system', `Connecting to Gemini (${geminiModel})...`);
-      geminiService.configure({ apiKey, model: geminiModel });
-      await geminiService.connect();
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      addMessage('system', 'Connected. Ready for voice input.');
-    } catch (err: any) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      addMessage('system', `Connection failed: ${err.message}`);
-    }
+    connectToGemini(false);
   };
 
   const sendTextMessage = () => {
@@ -118,7 +163,7 @@ export function HomeScreen() {
               styles.connectButton,
               { backgroundColor: colors.accent, opacity: pressed ? 0.8 : 1 },
             ]}
-            onPress={connectToGemini}
+            onPress={handleConnect}
           >
             <Ionicons
               name={wsState === 'connecting' ? 'sync' : 'flash'}

@@ -118,8 +118,8 @@ class WebSocketService {
     return this.ws?.readyState === WebSocket.OPEN;
   }
 
-  private notifyState(state: 'connecting' | 'connected' | 'disconnected' | 'error'): void {
-    this.stateHandlers.forEach((handler) => handler(state));
+  private notifyState(state: 'connecting' | 'connected' | 'disconnected' | 'error', detail?: string): void {
+    this.stateHandlers.forEach((handler) => handler(state, detail));
   }
 
   private scheduleReconnect(): void {
