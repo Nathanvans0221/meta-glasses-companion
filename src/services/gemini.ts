@@ -25,7 +25,14 @@ class GeminiService {
     }
 
     const config = this.config;
-    const model = config.model || GEMINI_DEFAULT_MODEL;
+    let model = config.model || GEMINI_DEFAULT_MODEL;
+
+    // Safety net: Live API requires a "live" model variant
+    if (!model.includes('live')) {
+      console.warn(`Model "${model}" is not a Live API model, falling back to ${GEMINI_DEFAULT_MODEL}`);
+      model = GEMINI_DEFAULT_MODEL;
+    }
+
     const url = `${GEMINI_WS_BASE}?key=${config.apiKey}`;
 
     // Listen for incoming messages
