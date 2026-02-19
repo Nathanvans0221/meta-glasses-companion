@@ -143,9 +143,18 @@ export function HomeScreen() {
       }
     });
 
-    const unsub = websocketService.onStateChange((state) => {
+    // Verbose logging — shows every WS state change with close details
+    const unsub = websocketService.onStateChange((state, detail) => {
       setWsState(state as any);
       setSessionActive(state === 'connected');
+      if (state === 'disconnected' || state === 'error') {
+        const duration = connectedAt.current
+          ? `${Math.round((Date.now() - connectedAt.current) / 1000)}s`
+          : 'n/a';
+        const code = websocketService.lastCloseCode;
+        const reason = websocketService.lastCloseReason || 'none';
+        addMessage('system', `[WS ${state}] after ${duration}, code=${code}, reason=${reason}`);
+      }
     });
 
     return () => {
