@@ -153,7 +153,8 @@ export function HomeScreen() {
           : 'n/a';
         const code = websocketService.lastCloseCode;
         const reason = websocketService.lastCloseReason || 'none';
-        addMessage('system', `[WS ${state}] after ${duration}, code=${code}, reason=${reason}`);
+        const msgs = geminiService.getMessageCount();
+        addMessage('system', `[WS ${state}] ${duration}, code=${code}, reason=${reason}, msgs=${msgs}`);
       }
     });
 

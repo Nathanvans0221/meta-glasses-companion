@@ -16,9 +16,7 @@ class GeminiService {
   private disconnectCallback: ((detail?: string) => void) | null = null;
   private unsubscribeMessage: (() => void) | null = null;
   private unsubscribeState: (() => void) | null = null;
-
-  // Session resumption — Gemini sends us tokens to resume after disconnect
-  private resumptionHandle: string | null = null;
+  private messageCount = 0;
 
   configure(config: GeminiConfig): void {
     this.config = config;
@@ -31,14 +29,16 @@ class GeminiService {
 
     // Clean up any existing connection before reconnecting
     this.cleanupConnection();
+    this.messageCount = 0;
 
     const config = this.config;
     const model = config.model || GEMINI_DEFAULT_MODEL;
 
     const url = `${GEMINI_WS_BASE}?key=${config.apiKey}`;
 
-    // Listen for incoming messages
+    // Listen for incoming messages — log every single one for debugging
     this.unsubscribeMessage = websocketService.onMessage((data) => {
+      this.messageCount++;
       this.handleServerMessage(data);
     });
 
@@ -61,8 +61,9 @@ class GeminiService {
       });
     });
 
-    // Build setup message
-    const setupMsg: any = {
+    // Bare minimum setup — no sessionResumption, no contextWindowCompression
+    // Testing if those features cause instability with this preview model
+    const setupMsg = {
       setup: {
         model: `models/${model}`,
         generationConfig: {
@@ -84,18 +85,6 @@ class GeminiService {
                 'and work order operations through the WorkSuite system.',
             },
           ],
-        },
-        // Enable session resumption — server sends tokens we can use to
-        // seamlessly reconnect without losing conversation context
-        sessionResumption: this.resumptionHandle
-          ? { handle: this.resumptionHandle }
-          : {},
-        // Enable context window compression so sessions can exceed 10 min
-        contextWindowCompression: {
-          slidingWindow: {
-            targetTokens: 10000,
-          },
-          triggerTokens: 16000,
         },
       },
     };
@@ -132,6 +121,10 @@ class GeminiService {
 
     // Connection established — monitor for disconnects
     this.monitorConnection();
+  }
+
+  getMessageCount(): number {
+    return this.messageCount;
   }
 
   sendAudio(base64Audio: string): void {
@@ -171,7 +164,6 @@ class GeminiService {
 
   disconnect(): void {
     this.cleanupConnection();
-    this.resumptionHandle = null;
     websocketService.disconnect();
   }
 
@@ -179,10 +171,6 @@ class GeminiService {
     return websocketService.isConnected();
   }
 
-  /**
-   * Clean up handlers without closing the WebSocket.
-   * Preserves resumptionHandle so we can resume the session on reconnect.
-   */
   private cleanupConnection(): void {
     this.unsubscribeMessage?.();
     this.unsubscribeMessage = null;
@@ -190,10 +178,6 @@ class GeminiService {
     this.unsubscribeState = null;
   }
 
-  /**
-   * Monitor the WebSocket for unexpected disconnects after setup.
-   * Fires the onDisconnect callback so the UI can auto-reconnect.
-   */
   private monitorConnection(): void {
     this.unsubscribeState?.();
     this.unsubscribeState = websocketService.onStateChange((state, detail) => {
@@ -211,6 +195,10 @@ class GeminiService {
       return;
     }
 
+    // Log every message type we receive (for debugging)
+    const msgKeys = Object.keys(data || {}).join(',');
+    this.transcriptCallback?.(`[msg #${this.messageCount}: ${msgKeys}]`, 'assistant');
+
     // Handle error messages from Gemini
     if (data.error) {
       const errMsg = data.error.message || JSON.stringify(data.error);
@@ -218,18 +206,9 @@ class GeminiService {
       return;
     }
 
-    // Save session resumption tokens — used to seamlessly reconnect
-    if (data.sessionResumptionUpdate) {
-      if (data.sessionResumptionUpdate.newHandle) {
-        this.resumptionHandle = data.sessionResumptionUpdate.newHandle;
-      }
-    }
-
-    // Handle GoAway — server is about to disconnect, reconnect proactively
+    // Handle GoAway — server is about to disconnect
     if (data.goAway) {
-      this.transcriptCallback?.('Session expiring, reconnecting...', 'assistant');
-      // Don't wait — trigger disconnect callback so UI auto-reconnects
-      // The resumptionHandle is already saved, so reconnect will resume seamlessly
+      this.transcriptCallback?.(`[GoAway] timeLeft=${data.goAway.timeLeft}`, 'assistant');
       this.cleanupConnection();
       websocketService.disconnect();
       this.disconnectCallback?.('GoAway: session expiring');
