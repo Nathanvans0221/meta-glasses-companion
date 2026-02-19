@@ -11,6 +11,10 @@ export interface GeminiConfig {
 // Send a lightweight message every 15s to prevent Gemini idle timeout
 const KEEPALIVE_INTERVAL_MS = 15_000;
 
+// 10ms of silence at 16kHz, 16-bit mono PCM = 320 bytes of zeros, base64-encoded
+// This is the smallest meaningful audio chunk we can send as a keepalive
+const SILENT_AUDIO_CHUNK = 'A'.repeat(427) + '=';
+
 class GeminiService {
   private config: GeminiConfig | null = null;
   private transcriptCallback: ((text: string, role: 'user' | 'assistant') => void) | null = null;
@@ -181,18 +185,24 @@ class GeminiService {
 
   /**
    * Send periodic keepalive pings to prevent Gemini's idle timeout.
-   * Uses an empty client content message which Gemini accepts without error.
+   * Sends a tiny silent audio chunk via realtimeInput — the natural
+   * "I'm still here" signal for a bidirectional audio stream.
+   * (Empty clientContent causes "Stream end encountered" — don't use that.)
    */
   private startKeepalive(): void {
     this.stopKeepalive();
     this.keepaliveTimer = setInterval(() => {
       if (websocketService.isConnected()) {
-        // Send a minimal client message that Gemini will accept as activity
-        // An empty realtime input with no chunks acts as a ping
+        // 10ms of silence at 16kHz 16-bit mono = 320 bytes of zeros
+        // Base64-encoded: 320 zero bytes → ~428 chars of 'A's
         websocketService.send({
-          clientContent: {
-            turns: [],
-            turnComplete: false,
+          realtimeInput: {
+            mediaChunks: [
+              {
+                mimeType: 'audio/pcm;rate=16000',
+                data: SILENT_AUDIO_CHUNK,
+              },
+            ],
           },
         });
       }
