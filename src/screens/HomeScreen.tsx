@@ -47,19 +47,17 @@ export function HomeScreen() {
       addMessage(role, text);
     });
 
-    geminiService.onAudioResponse(async (base64Audio) => {
-      try {
-        setAudioState('playing');
-        await audioService.playAudioFromBase64(base64Audio);
-      } catch (err) {
-        addMessage('system', `Audio playback error: ${err}`);
-        setAudioState('idle');
-      }
+    geminiService.onAudioResponse((base64Audio) => {
+      // Accumulate audio chunks — play when turn completes
+      audioService.addAudioChunk(base64Audio);
     });
 
-    geminiService.onTurnComplete(() => {
-      const currentState = useConversationStore.getState().audioState;
-      if (currentState === 'processing') {
+    geminiService.onTurnComplete(async () => {
+      try {
+        setAudioState('playing');
+        await audioService.playAccumulatedAudio();
+      } catch (err) {
+        addMessage('system', `Audio playback error: ${err}`);
         setAudioState('idle');
       }
     });
