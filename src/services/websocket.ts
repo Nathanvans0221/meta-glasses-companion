@@ -51,10 +51,10 @@ class WebSocketService {
 
   sendAudioChunk(base64Audio: string): void {
     this.send({
-      realtime_input: {
-        media_chunks: [
+      realtimeInput: {
+        mediaChunks: [
           {
-            mime_type: 'audio/pcm;rate=16000',
+            mimeType: 'audio/pcm;rate=16000',
             data: base64Audio,
           },
         ],

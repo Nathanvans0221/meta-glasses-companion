@@ -84,17 +84,17 @@ class GeminiService {
       websocketService.send({
         setup: {
           model: `models/${model}`,
-          generation_config: {
-            response_modalities: ['AUDIO', 'TEXT'],
-            speech_config: {
-              voice_config: {
-                prebuilt_voice_config: {
-                  voice_name: 'Aoede',
+          generationConfig: {
+            responseModalities: ['AUDIO', 'TEXT'],
+            speechConfig: {
+              voiceConfig: {
+                prebuiltVoiceConfig: {
+                  voiceName: 'Kore',
                 },
               },
             },
           },
-          system_instruction: {
+          systemInstruction: {
             parts: [
               {
                 text: config.systemInstruction ||
@@ -115,14 +115,14 @@ class GeminiService {
 
   sendText(text: string): void {
     websocketService.send({
-      client_content: {
+      clientContent: {
         turns: [
           {
             role: 'user',
             parts: [{ text }],
           },
         ],
-        turn_complete: true,
+        turnComplete: true,
       },
     });
     this.transcriptCallback?.(text, 'user');
