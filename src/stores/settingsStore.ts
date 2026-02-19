@@ -28,11 +28,13 @@ export const useSettingsStore = create<SettingsStore>()(
     {
       name: 'app-settings',
       storage: createJSONStorage(() => AsyncStorage),
-      onRehydrate: () => (state) => {
+      merge: (persistedState: any, currentState) => {
+        const merged = { ...currentState, ...persistedState };
         // Fix persisted model if it's a non-Live API model
-        if (state && INVALID_LIVE_MODELS.includes(state.geminiModel)) {
-          state.geminiModel = GEMINI_DEFAULT_MODEL;
+        if (INVALID_LIVE_MODELS.includes(merged.geminiModel)) {
+          merged.geminiModel = GEMINI_DEFAULT_MODEL;
         }
+        return merged;
       },
     },
   ),
