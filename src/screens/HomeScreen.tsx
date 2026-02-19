@@ -28,6 +28,7 @@ export function HomeScreen() {
   const [textInput, setTextInput] = React.useState('');
   const reconnectAttempts = useRef(0);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const connectedAt = useRef<number>(0);
 
   useEffect(() => {
     if (keepAwake) {
@@ -38,6 +39,22 @@ export function HomeScreen() {
   }, [keepAwake]);
 
   const setAudioState = useConversationStore((s) => s.setAudioState);
+
+  const scheduleReconnect = useCallback(() => {
+    if (reconnectAttempts.current >= MAX_AUTO_RECONNECT_ATTEMPTS) {
+      addMessage('system', 'Connection lost. Tap "Connect to AI" to reconnect.');
+      reconnectAttempts.current = 0;
+      return;
+    }
+
+    if (reconnectAttempts.current === 0) {
+      addMessage('system', 'Connection lost, reconnecting...');
+    }
+    reconnectAttempts.current += 1;
+    reconnectTimer.current = setTimeout(() => {
+      connectToGemini(true);
+    }, AUTO_RECONNECT_DELAY_MS);
+  }, []);
 
   const connectToGemini = useCallback(async (isAutoReconnect = false) => {
     if (!apiKey) {
@@ -57,6 +74,7 @@ export function HomeScreen() {
       await geminiService.connect();
       const wasReconnect = reconnectAttempts.current > 0;
       reconnectAttempts.current = 0;
+      connectedAt.current = Date.now();
       if (!isAutoReconnect) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
@@ -65,11 +83,12 @@ export function HomeScreen() {
       if (!isAutoReconnect) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         addMessage('system', `Connection failed: ${err.message}`);
+      } else {
+        // Auto-reconnect failed — schedule another retry
+        scheduleReconnect();
       }
-      // Auto-reconnect failures are handled silently — the onDisconnect
-      // handler will retry or show the final failure message
     }
-  }, [apiKey, geminiModel, addMessage]);
+  }, [apiKey, geminiModel, addMessage, scheduleReconnect]);
 
   useEffect(() => {
     audioService.initialize().catch((err) => {
@@ -100,21 +119,27 @@ export function HomeScreen() {
 
     // Handle unexpected disconnects — auto-reconnect with session resumption
     geminiService.onDisconnect((detail) => {
+      const duration = connectedAt.current
+        ? Math.round((Date.now() - connectedAt.current) / 1000)
+        : 0;
+      connectedAt.current = 0;
+
       setWsState('disconnected');
       setSessionActive(false);
 
-      if (reconnectAttempts.current < MAX_AUTO_RECONNECT_ATTEMPTS) {
-        // Only show message on first disconnect, keep retries quiet
-        if (reconnectAttempts.current === 0) {
-          addMessage('system', 'Connection lost, reconnecting...');
-        }
+      // Show diagnostic info on first disconnect so we can debug
+      if (reconnectAttempts.current === 0 && duration > 0) {
+        const closeCode = websocketService.lastCloseCode;
+        const closeReason = websocketService.lastCloseReason;
+        addMessage('system',
+          `Disconnected after ${duration}s (code=${closeCode} ${closeReason || 'no reason'}). Reconnecting...`
+        );
         reconnectAttempts.current += 1;
         reconnectTimer.current = setTimeout(() => {
           connectToGemini(true);
         }, AUTO_RECONNECT_DELAY_MS);
       } else {
-        addMessage('system', 'Connection lost. Tap "Connect to AI" to reconnect.');
-        reconnectAttempts.current = 0;
+        scheduleReconnect();
       }
     });
 
@@ -135,6 +160,7 @@ export function HomeScreen() {
 
   const handleConnect = () => {
     reconnectAttempts.current = 0;
+    connectedAt.current = 0;
     if (reconnectTimer.current) {
       clearTimeout(reconnectTimer.current);
       reconnectTimer.current = null;
