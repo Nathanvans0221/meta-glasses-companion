@@ -8,8 +8,12 @@ interface SettingsStore extends AppSettings {
   updateSettings: (partial: Partial<AppSettings>) => void;
 }
 
-// Models that are NOT valid for the Live API — auto-correct on hydration
-const INVALID_LIVE_MODELS = ['gemini-2.0-flash-exp', 'gemini-2.0-flash'];
+// Models that are NOT valid or are deprecated for the Live API — auto-correct on hydration
+const INVALID_LIVE_MODELS = [
+  'gemini-2.0-flash-exp',
+  'gemini-2.0-flash',
+  'gemini-2.0-flash-live-001',  // deprecated March 2026
+];
 
 export const useSettingsStore = create<SettingsStore>()(
   persist(

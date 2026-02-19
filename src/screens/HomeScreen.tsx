@@ -84,7 +84,7 @@ export function HomeScreen() {
 
     try {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      addMessage('system', 'Connecting to Gemini...');
+      addMessage('system', `Connecting to Gemini (${geminiModel})...`);
       geminiService.configure({ apiKey, model: geminiModel });
       await geminiService.connect();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);

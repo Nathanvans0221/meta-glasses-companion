@@ -8,7 +8,7 @@ export const APP_VERSION = '1.0.0';
 
 // Gemini Live API
 export const GEMINI_WS_BASE = 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent';
-export const GEMINI_DEFAULT_MODEL = 'gemini-2.0-flash-live-001';
+export const GEMINI_DEFAULT_MODEL = 'gemini-2.5-flash-native-audio-preview-12-2025';
 
 // Audio settings
 export const AUDIO_SAMPLE_RATE = 16000;

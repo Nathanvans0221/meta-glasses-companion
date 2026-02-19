@@ -25,13 +25,7 @@ class GeminiService {
     }
 
     const config = this.config;
-    let model = config.model || GEMINI_DEFAULT_MODEL;
-
-    // Safety net: Live API requires a "live" model variant
-    if (!model.includes('live')) {
-      console.warn(`Model "${model}" is not a Live API model, falling back to ${GEMINI_DEFAULT_MODEL}`);
-      model = GEMINI_DEFAULT_MODEL;
-    }
+    const model = config.model || GEMINI_DEFAULT_MODEL;
 
     const url = `${GEMINI_WS_BASE}?key=${config.apiKey}`;
 
@@ -153,6 +147,13 @@ class GeminiService {
   }
 
   private handleServerMessage(data: any): void {
+    // Handle error messages from Gemini
+    if (data.error) {
+      const errMsg = data.error.message || JSON.stringify(data.error);
+      this.transcriptCallback?.(`Error: ${errMsg}`, 'assistant');
+      return;
+    }
+
     // Handle text responses
     if (data.serverContent?.modelTurn?.parts) {
       for (const part of data.serverContent.modelTurn.parts) {
