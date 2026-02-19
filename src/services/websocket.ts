@@ -1,5 +1,5 @@
 type MessageHandler = (data: any) => void;
-type StateHandler = (state: 'connecting' | 'connected' | 'disconnected' | 'error') => void;
+type StateHandler = (state: 'connecting' | 'connected' | 'disconnected' | 'error', detail?: string) => void;
 
 class WebSocketService {
   private ws: WebSocket | null = null;
@@ -8,6 +8,8 @@ class WebSocketService {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private url: string = '';
   private autoReconnect: boolean = true;
+  public lastCloseCode: number = 0;
+  public lastCloseReason: string = '';
 
   connect(url: string, autoReconnect = true): void {
     this.url = url;
@@ -22,20 +24,29 @@ class WebSocketService {
 
     this.ws.onmessage = (event) => {
       try {
-        const data = JSON.parse(event.data);
+        const raw = typeof event.data === 'string' ? event.data : String(event.data);
+        const data = JSON.parse(raw);
         this.messageHandlers.forEach((handler) => handler(data));
       } catch {
-        // Handle non-JSON messages
-        this.messageHandlers.forEach((handler) => handler(event.data));
+        // Surface parse failures as a special message
+        this.messageHandlers.forEach((handler) => handler({
+          _parseError: true,
+          _rawType: typeof event.data,
+          _rawPreview: String(event.data).substring(0, 200),
+        }));
       }
     };
 
-    this.ws.onerror = () => {
-      this.notifyState('error');
+    this.ws.onerror = (err: any) => {
+      const detail = err?.message || 'unknown error';
+      this.notifyState('error', detail);
     };
 
-    this.ws.onclose = () => {
-      this.notifyState('disconnected');
+    this.ws.onclose = (event: any) => {
+      this.lastCloseCode = event?.code || 0;
+      this.lastCloseReason = event?.reason || '';
+      const detail = `code=${this.lastCloseCode} reason=${this.lastCloseReason}`;
+      this.notifyState('disconnected', detail);
       if (this.autoReconnect) {
         this.scheduleReconnect();
       }

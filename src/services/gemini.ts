@@ -71,13 +71,14 @@ class GeminiService {
         }
       });
 
-      // If the connection drops during setup, reject
-      const unsubState = websocketService.onStateChange((state) => {
+      // If the connection drops during setup, reject with details
+      const unsubState = websocketService.onStateChange((state, detail) => {
         if (state === 'disconnected' || state === 'error') {
           clearTimeout(setupTimeout);
           unsubMsg();
           unsubState();
-          reject(new Error('Connection lost during setup — check API key and model'));
+          const closeInfo = `close=${websocketService.lastCloseCode} ${websocketService.lastCloseReason}`;
+          reject(new Error(`Setup failed [${closeInfo}] ${detail || ''}`));
         }
       });
 
@@ -147,6 +148,12 @@ class GeminiService {
   }
 
   private handleServerMessage(data: any): void {
+    // Surface WebSocket parse errors
+    if (data?._parseError) {
+      this.transcriptCallback?.(`[WS parse error] type=${data._rawType} preview=${data._rawPreview}`, 'assistant');
+      return;
+    }
+
     // Handle error messages from Gemini
     if (data.error) {
       const errMsg = data.error.message || JSON.stringify(data.error);
