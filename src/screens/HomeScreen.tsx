@@ -108,12 +108,15 @@ export function HomeScreen() {
     });
 
     geminiService.onTurnComplete(async () => {
-      try {
-        setAudioState('playing');
-        await audioService.playAccumulatedAudio();
-      } catch (err) {
-        addMessage('system', `Audio playback error: ${err}`);
-        setAudioState('idle');
+      // If there are accumulated audio chunks, try to play them
+      if (audioService.hasAudioChunks()) {
+        try {
+          setAudioState('playing');
+          await audioService.playAccumulatedAudio();
+        } catch (err) {
+          addMessage('system', `Audio playback error: ${err}`);
+          setAudioState('idle');
+        }
       }
     });
 

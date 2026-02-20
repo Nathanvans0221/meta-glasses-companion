@@ -162,6 +162,10 @@ class AudioService {
     this.audioChunks.push(base64Audio);
   }
 
+  hasAudioChunks(): boolean {
+    return this.audioChunks.length > 0;
+  }
+
   /**
    * Combine all accumulated PCM chunks, wrap in WAV header,
    * write to temp file, and play.

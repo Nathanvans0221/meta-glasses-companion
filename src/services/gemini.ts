@@ -67,14 +67,7 @@ class GeminiService {
       setup: {
         model: `models/${model}`,
         generationConfig: {
-          responseModalities: ['AUDIO'],
-          speechConfig: {
-            voiceConfig: {
-              prebuiltVoiceConfig: {
-                voiceName: 'Kore',
-              },
-            },
-          },
+          responseModalities: ['TEXT'],
         },
         systemInstruction: {
           parts: [
