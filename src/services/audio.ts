@@ -8,19 +8,25 @@ const GEMINI_OUTPUT_CHANNELS = 1;
 const GEMINI_OUTPUT_BIT_DEPTH = 16;
 
 /**
- * Create a WAV header for raw PCM data.
- * Returns a base64-encoded WAV header.
+ * Create a complete WAV file (header + PCM data) as a single base64 string.
+ * We must combine header and PCM as raw bytes BEFORE base64 encoding,
+ * because concatenating two base64 strings produces corrupted data
+ * (base64 padding at the boundary breaks decoding).
  */
-function createWavHeader(pcmByteLength: number): string {
+function createWavBase64(pcmBase64: string): string {
+  // Decode PCM from base64 to binary string
+  const pcmBinary = atob(pcmBase64);
+  const pcmByteLength = pcmBinary.length;
+
   const sampleRate = GEMINI_OUTPUT_SAMPLE_RATE;
   const channels = GEMINI_OUTPUT_CHANNELS;
   const bitDepth = GEMINI_OUTPUT_BIT_DEPTH;
   const byteRate = sampleRate * channels * (bitDepth / 8);
   const blockAlign = channels * (bitDepth / 8);
-  const dataSize = pcmByteLength;
-  const fileSize = 36 + dataSize;
 
-  const buffer = new ArrayBuffer(44);
+  // Create buffer for header (44 bytes) + PCM data
+  const totalLength = 44 + pcmByteLength;
+  const buffer = new ArrayBuffer(totalLength);
   const view = new DataView(buffer);
 
   // "RIFF" chunk
@@ -28,7 +34,7 @@ function createWavHeader(pcmByteLength: number): string {
   view.setUint8(1, 0x49); // I
   view.setUint8(2, 0x46); // F
   view.setUint8(3, 0x46); // F
-  view.setUint32(4, fileSize, true);
+  view.setUint32(4, 36 + pcmByteLength, true);
   view.setUint8(8, 0x57);  // W
   view.setUint8(9, 0x41);  // A
   view.setUint8(10, 0x56); // V
@@ -39,7 +45,7 @@ function createWavHeader(pcmByteLength: number): string {
   view.setUint8(13, 0x6D); // m
   view.setUint8(14, 0x74); // t
   view.setUint8(15, 0x20); // (space)
-  view.setUint32(16, 16, true);         // Sub-chunk size
+  view.setUint32(16, 16, true);
   view.setUint16(20, 1, true);          // PCM format
   view.setUint16(22, channels, true);
   view.setUint32(24, sampleRate, true);
@@ -52,13 +58,20 @@ function createWavHeader(pcmByteLength: number): string {
   view.setUint8(37, 0x61); // a
   view.setUint8(38, 0x74); // t
   view.setUint8(39, 0x61); // a
-  view.setUint32(40, dataSize, true);
+  view.setUint32(40, pcmByteLength, true);
 
-  // Convert ArrayBuffer to base64
+  // Copy PCM data into buffer after header
+  for (let i = 0; i < pcmByteLength; i++) {
+    view.setUint8(44 + i, pcmBinary.charCodeAt(i));
+  }
+
+  // Convert entire buffer to base64 in chunks to avoid stack overflow
   const bytes = new Uint8Array(buffer);
   let binary = '';
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]);
+  const chunkSize = 8192;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
+    binary += String.fromCharCode.apply(null, Array.from(chunk));
   }
   return btoa(binary);
 }
@@ -180,12 +193,8 @@ class AudioService {
     const combinedBase64 = this.audioChunks.join('');
     this.audioChunks = [];
 
-    // Calculate PCM byte length from base64
-    const pcmByteLength = Math.floor((combinedBase64.length * 3) / 4);
-
-    // Create WAV header + PCM data as base64
-    const wavHeaderBase64 = createWavHeader(pcmByteLength);
-    const wavBase64 = wavHeaderBase64 + combinedBase64;
+    // Create proper WAV file (header + PCM combined before base64 encoding)
+    const wavBase64 = createWavBase64(combinedBase64);
 
     // Write to temp file
     const filename = `gemini_audio_${this.audioFileCounter++}.wav`;

@@ -17,6 +17,7 @@ class GeminiService {
   private unsubscribeMessage: (() => void) | null = null;
   private unsubscribeState: (() => void) | null = null;
   private messageCount = 0;
+  private audioMode = false;
 
   configure(config: GeminiConfig): void {
     this.config = config;
@@ -88,6 +89,8 @@ class GeminiService {
         },
       },
     };
+
+    this.audioMode = true;
 
     // Send setup message and wait for setupComplete
     await new Promise<void>((resolve, reject) => {
@@ -213,22 +216,16 @@ class GeminiService {
       return;
     }
 
-    // Handle audio responses — in AUDIO mode, part.text is internal planning, not the answer.
-    // The real response comes through audio playback via inlineData.
+    // Handle model responses
     if (data.serverContent.modelTurn?.parts) {
-      let hasAudio = false;
       for (const part of data.serverContent.modelTurn.parts) {
         if (part.inlineData?.data) {
           this.audioCallback?.(part.inlineData.data);
-          hasAudio = true;
         }
-      }
-      // Only show text if there's no audio (fallback for text-only models)
-      if (!hasAudio) {
-        for (const part of data.serverContent.modelTurn.parts) {
-          if (part.text) {
-            this.transcriptCallback?.(part.text, 'assistant');
-          }
+        // In audio mode, part.text is internal planning — skip it.
+        // Only show text responses when NOT in audio mode.
+        if (part.text && !this.audioMode) {
+          this.transcriptCallback?.(part.text, 'assistant');
         }
       }
     }
