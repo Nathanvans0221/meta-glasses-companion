@@ -25,6 +25,7 @@ export function HomeScreen() {
   const keepAwake = useSettingsStore((s) => s.keepAwake);
   const apiKey = useSettingsStore((s) => s.geminiApiKey);
   const geminiModel = useSettingsStore((s) => s.geminiModel);
+  const toolsEnabled = useSettingsStore((s) => s.toolsEnabled);
   const [textInput, setTextInput] = React.useState('');
   const reconnectAttempts = useRef(0);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -70,7 +71,7 @@ export function HomeScreen() {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         addMessage('system', `Connecting to Gemini (${geminiModel})...`);
       }
-      geminiService.configure({ apiKey, model: geminiModel });
+      geminiService.configure({ apiKey, model: geminiModel, toolsEnabled });
       await geminiService.connect();
       const wasReconnect = reconnectAttempts.current > 0;
       reconnectAttempts.current = 0;

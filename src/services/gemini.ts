@@ -1,16 +1,19 @@
 import { websocketService } from './websocket';
 import { audioService } from './audio';
 import { GEMINI_WS_BASE, GEMINI_DEFAULT_MODEL } from '../constants';
+import { toolRegistry } from './tools';
+import type { GeminiFunctionCall } from './tools/types';
 
 export interface GeminiConfig {
   apiKey: string;
   model?: string;
   systemInstruction?: string;
+  toolsEnabled?: boolean;
 }
 
 class GeminiService {
   private config: GeminiConfig | null = null;
-  private transcriptCallback: ((text: string, role: 'user' | 'assistant') => void) | null = null;
+  private transcriptCallback: ((text: string, role: 'user' | 'assistant' | 'system') => void) | null = null;
   private audioCallback: ((base64Audio: string) => void) | null = null;
   private turnCompleteCallback: (() => void) | null = null;
   private disconnectCallback: ((detail?: string) => void) | null = null;
@@ -62,9 +65,8 @@ class GeminiService {
       });
     });
 
-    // Bare minimum setup — no sessionResumption, no contextWindowCompression
-    // Testing if those features cause instability with this preview model
-    const setupMsg = {
+    // Build setup message with optional tool declarations
+    const setupMsg: any = {
       setup: {
         model: `models/${model}`,
         generationConfig: {
@@ -80,15 +82,17 @@ class GeminiService {
         systemInstruction: {
           parts: [
             {
-              text: config.systemInstruction ||
-                'You are a helpful voice assistant. Keep responses concise and conversational. ' +
-                'Do not describe yourself or your capabilities unless asked. ' +
-                'Simply wait for the user to speak or type, then respond naturally.',
+              text: this.buildSystemInstruction(config),
             },
           ],
         },
       },
     };
+
+    // Add tool declarations if enabled
+    if (config.toolsEnabled !== false && toolRegistry.size > 0) {
+      setupMsg.setup.tools = toolRegistry.getToolsConfig();
+    }
 
     this.audioMode = true;
 
@@ -148,7 +152,7 @@ class GeminiService {
     });
   }
 
-  onTranscript(callback: (text: string, role: 'user' | 'assistant') => void): void {
+  onTranscript(callback: (text: string, role: 'user' | 'assistant' | 'system') => void): void {
     this.transcriptCallback = callback;
   }
 
@@ -171,6 +175,31 @@ class GeminiService {
 
   isConnected(): boolean {
     return websocketService.isConnected();
+  }
+
+  private buildSystemInstruction(config: GeminiConfig): string {
+    const base =
+      config.systemInstruction ||
+      'You are a helpful voice assistant. Keep responses concise and conversational. ' +
+      'Do not describe yourself or your capabilities unless asked. ' +
+      'Simply wait for the user to speak or type, then respond naturally.';
+
+    if (config.toolsEnabled === false || toolRegistry.size === 0) {
+      return base;
+    }
+
+    return (
+      base +
+      '\n\n' +
+      'You have access to tools that let you perform actions. ' +
+      'When the user asks for the current time/date, use the get_current_datetime tool. ' +
+      'When the user asks to calculate or do math, use the calculate tool. ' +
+      'When the user asks to set a reminder, use the set_reminder tool. ' +
+      'When the user asks about their reminders, use the list_reminders tool. ' +
+      'When the user asks about their device, use the get_device_info tool. ' +
+      'Always use the appropriate tool rather than guessing the answer. ' +
+      'After receiving the tool result, speak the answer conversationally.'
+    );
   }
 
   private cleanupConnection(): void {
@@ -211,6 +240,17 @@ class GeminiService {
       return;
     }
 
+    // Handle tool calls from Gemini
+    if (data.toolCall?.functionCalls) {
+      this.handleToolCalls(data.toolCall.functionCalls);
+      return;
+    }
+
+    // Handle tool call cancellation (Gemini changed its mind) — no-op
+    if (data.toolCallCancellation) {
+      return;
+    }
+
     // Ignore setupComplete, usageMetadata, sessionResumptionUpdate, etc.
     if (!data.serverContent) {
       return;
@@ -234,6 +274,16 @@ class GeminiService {
     if (data.serverContent.turnComplete) {
       this.turnCompleteCallback?.();
     }
+  }
+
+  private async handleToolCalls(functionCalls: GeminiFunctionCall[]): Promise<void> {
+    // Show tool execution in transcript
+    const toolNames = functionCalls.map((c) => c.name).join(', ');
+    this.transcriptCallback?.(`Using ${toolNames}...`, 'system');
+
+    // Execute all tools and send results back to Gemini
+    const responsePayload = await toolRegistry.executeAll(functionCalls);
+    websocketService.send(responsePayload);
   }
 }
 

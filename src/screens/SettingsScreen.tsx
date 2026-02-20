@@ -252,6 +252,29 @@ export function SettingsScreen() {
         />
       </SettingsGroup>
 
+      {/* Tools */}
+      <Text style={[styles.sectionHeader, { color: colors.textSecondary }]}>
+        TOOLS
+      </Text>
+      <SettingsGroup>
+        <SettingsRow
+          icon="hammer"
+          iconColor="#1A93AE"
+          label="Enable Voice Tools"
+          description="Time, math, reminders, device info"
+          right={
+            <Switch
+              value={settings.toolsEnabled}
+              onValueChange={(val) => {
+                Haptics.selectionAsync();
+                settings.updateSettings({ toolsEnabled: val });
+              }}
+              trackColor={{ false: colors.fill, true: colors.accent }}
+            />
+          }
+        />
+      </SettingsGroup>
+
       {/* Data */}
       <Text style={[styles.sectionHeader, { color: colors.textSecondary }]}>
         DATA

@@ -23,6 +23,7 @@ export const useSettingsStore = create<SettingsStore>()(
       autoReconnect: true,
       keepAwake: true,
       darkMode: true,
+      toolsEnabled: true,
       updateSettings: (partial) => set(partial),
     }),
     {

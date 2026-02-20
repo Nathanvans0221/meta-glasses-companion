@@ -29,4 +29,5 @@ export interface AppSettings {
   autoReconnect: boolean;
   keepAwake: boolean;
   darkMode: boolean;
+  toolsEnabled: boolean;
 }
