@@ -143,7 +143,6 @@ class GeminiService {
         turnComplete: true,
       },
     });
-    this.transcriptCallback?.(text, 'user');
   }
 
   onTranscript(callback: (text: string, role: 'user' | 'assistant') => void): void {
@@ -191,13 +190,8 @@ class GeminiService {
   private handleServerMessage(data: any): void {
     // Surface WebSocket parse errors
     if (data?._parseError) {
-      this.transcriptCallback?.(`[WS parse error] type=${data._rawType} preview=${data._rawPreview}`, 'assistant');
       return;
     }
-
-    // Log every message type we receive (for debugging)
-    const msgKeys = Object.keys(data || {}).join(',');
-    this.transcriptCallback?.(`[msg #${this.messageCount}: ${msgKeys}]`, 'assistant');
 
     // Handle error messages from Gemini
     if (data.error) {
@@ -208,15 +202,19 @@ class GeminiService {
 
     // Handle GoAway — server is about to disconnect
     if (data.goAway) {
-      this.transcriptCallback?.(`[GoAway] timeLeft=${data.goAway.timeLeft}`, 'assistant');
       this.cleanupConnection();
       websocketService.disconnect();
       this.disconnectCallback?.('GoAway: session expiring');
       return;
     }
 
-    // Handle text responses
-    if (data.serverContent?.modelTurn?.parts) {
+    // Ignore setupComplete, usageMetadata, sessionResumptionUpdate, etc.
+    if (!data.serverContent) {
+      return;
+    }
+
+    // Handle text and audio responses
+    if (data.serverContent.modelTurn?.parts) {
       for (const part of data.serverContent.modelTurn.parts) {
         if (part.text) {
           this.transcriptCallback?.(part.text, 'assistant');
@@ -228,7 +226,7 @@ class GeminiService {
     }
 
     // Handle turn completion
-    if (data.serverContent?.turnComplete) {
+    if (data.serverContent.turnComplete) {
       this.turnCompleteCallback?.();
     }
   }

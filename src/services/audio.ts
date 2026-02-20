@@ -189,7 +189,7 @@ class AudioService {
 
     try {
       await FileSystem.writeAsStringAsync(fileUri, wavBase64, {
-        encoding: FileSystem.EncodingType.Base64,
+        encoding: 'base64' as any,
       });
 
       if (this.sound) {

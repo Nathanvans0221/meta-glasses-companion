@@ -143,19 +143,9 @@ export function HomeScreen() {
       }
     });
 
-    // Verbose logging — shows every WS state change with close details
-    const unsub = websocketService.onStateChange((state, detail) => {
+    const unsub = websocketService.onStateChange((state) => {
       setWsState(state as any);
       setSessionActive(state === 'connected');
-      if (state === 'disconnected' || state === 'error') {
-        const duration = connectedAt.current
-          ? `${Math.round((Date.now() - connectedAt.current) / 1000)}s`
-          : 'n/a';
-        const code = websocketService.lastCloseCode;
-        const reason = websocketService.lastCloseReason || 'none';
-        const msgs = geminiService.getMessageCount();
-        addMessage('system', `[WS ${state}] ${duration}, code=${code}, reason=${reason}, msgs=${msgs}`);
-      }
     });
 
     return () => {
