@@ -1,5 +1,5 @@
 import { Audio } from 'expo-av';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { AUDIO_SAMPLE_RATE, AUDIO_CHANNELS } from '../constants';
 
 // Gemini outputs audio at 24kHz, 16-bit, mono PCM
@@ -189,7 +189,7 @@ class AudioService {
 
     try {
       await FileSystem.writeAsStringAsync(fileUri, wavBase64, {
-        encoding: 'base64' as any,
+        encoding: FileSystem.EncodingType.Base64,
       });
 
       if (this.sound) {

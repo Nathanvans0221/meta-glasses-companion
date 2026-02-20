@@ -80,9 +80,9 @@ class GeminiService {
           parts: [
             {
               text: config.systemInstruction ||
-                'You are a helpful voice assistant for field workers using Meta Ray-Ban smart glasses. ' +
-                'Keep responses concise and actionable. You help with inventory, task management, ' +
-                'and work order operations through the WorkSuite system.',
+                'You are a helpful voice assistant. Keep responses concise and conversational. ' +
+                'Do not describe yourself or your capabilities unless asked. ' +
+                'Simply wait for the user to speak or type, then respond naturally.',
             },
           ],
         },
