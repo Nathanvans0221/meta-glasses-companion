@@ -12,7 +12,7 @@ interface SettingsStore extends AppSettings {
 const INVALID_LIVE_MODELS = [
   'gemini-2.0-flash-exp',
   'gemini-2.0-flash',
-  'gemini-2.5-flash-native-audio-preview-12-2025',  // audio-only, no text support
+  'gemini-2.0-flash-live-001',
 ];
 
 export const useSettingsStore = create<SettingsStore>()(

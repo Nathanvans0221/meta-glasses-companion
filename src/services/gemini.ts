@@ -67,7 +67,14 @@ class GeminiService {
       setup: {
         model: `models/${model}`,
         generationConfig: {
-          responseModalities: ['TEXT'],
+          responseModalities: ['AUDIO'],
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: {
+                voiceName: 'Kore',
+              },
+            },
+          },
         },
         systemInstruction: {
           parts: [
@@ -206,14 +213,22 @@ class GeminiService {
       return;
     }
 
-    // Handle text and audio responses
+    // Handle audio responses — in AUDIO mode, part.text is internal planning, not the answer.
+    // The real response comes through audio playback via inlineData.
     if (data.serverContent.modelTurn?.parts) {
+      let hasAudio = false;
       for (const part of data.serverContent.modelTurn.parts) {
-        if (part.text) {
-          this.transcriptCallback?.(part.text, 'assistant');
-        }
         if (part.inlineData?.data) {
           this.audioCallback?.(part.inlineData.data);
+          hasAudio = true;
+        }
+      }
+      // Only show text if there's no audio (fallback for text-only models)
+      if (!hasAudio) {
+        for (const part of data.serverContent.modelTurn.parts) {
+          if (part.text) {
+            this.transcriptCallback?.(part.text, 'assistant');
+          }
         }
       }
     }
