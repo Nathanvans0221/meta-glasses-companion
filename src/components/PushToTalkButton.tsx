@@ -78,8 +78,10 @@ export function PushToTalkButton() {
     Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true }).start();
 
     try {
-      // Stop streaming — Gemini's VAD detects end of speech automatically
-      const chunksSent = await audioService.stopStreamingRecording();
+      // Stop streaming and send silence to trigger Gemini's VAD
+      const chunksSent = await audioService.stopStreamingRecording(
+        (silencePcm) => geminiService.sendAudio(silencePcm),
+      );
 
       if (chunksSent > 0) {
         setAudioState('processing');

@@ -12,6 +12,27 @@ const GEMINI_OUTPUT_BIT_DEPTH = 16;
 // Streaming config: send audio chunks every 200ms for low-latency streaming
 const STREAM_INTERVAL_MS = 200;
 
+// Duration of silence to send after user stops talking (triggers Gemini VAD)
+const SILENCE_DURATION_MS = 600;
+
+/**
+ * Generate base64-encoded silence (zero PCM) for the given duration.
+ * This is sent after the user releases PTT to trigger Gemini's VAD.
+ */
+function generateSilenceBase64(durationMs: number): string {
+  const numSamples = Math.floor((16000 * durationMs) / 1000);
+  const buffer = new ArrayBuffer(numSamples * 2); // 16-bit = 2 bytes per sample
+  // ArrayBuffer is zero-initialized, so it's already silence
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  const chunkSize = 8192;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
+    binary += String.fromCharCode.apply(null, Array.from(chunk));
+  }
+  return btoa(binary);
+}
+
 /**
  * Create a complete WAV file (header + PCM data) as a single base64 string.
  * Used for playback of Gemini's audio responses via expo-av.
@@ -148,9 +169,13 @@ class AudioService {
   }
 
   /**
-   * Stop streaming recording. Returns the number of chunks that were sent.
+   * Stop streaming recording and send silence to trigger Gemini's VAD.
+   * Returns the number of audio chunks that were streamed.
+   * The onSilence callback sends the silence chunk through the same audio path.
    */
-  async stopStreamingRecording(): Promise<number> {
+  async stopStreamingRecording(
+    onSilence?: (base64Pcm: string) => void,
+  ): Promise<number> {
     if (!this.isStreaming) return 0;
 
     this.isStreaming = false;
@@ -162,6 +187,12 @@ class AudioService {
       await ExpoPlayAudioStream.stopRecording();
     } catch {
       // Ignore stop errors — recording may have already been stopped
+    }
+
+    // Send silence so Gemini's VAD detects end of speech
+    if (chunksSent > 0 && onSilence) {
+      const silence = generateSilenceBase64(SILENCE_DURATION_MS);
+      onSilence(silence);
     }
 
     return chunksSent;
