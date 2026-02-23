@@ -12,6 +12,13 @@ import {
   setReminderTool,
   listRemindersTool,
   deviceInfoTool,
+  productionScheduleTool,
+  inventoryTool,
+  ordersTool,
+  customerLookupTool,
+  logHarvestTool,
+  harvestSummaryTool,
+  fieldStatusTool,
 } from './handlers';
 
 class ToolRegistry {
@@ -82,11 +89,20 @@ class ToolRegistry {
 // Singleton instance
 export const toolRegistry = new ToolRegistry();
 
-// Register all Phase 1 tools
+// Register utility tools
 toolRegistry.register(datetimeTool);
 toolRegistry.register(mathTool);
 toolRegistry.register(setReminderTool);
 toolRegistry.register(listRemindersTool);
 toolRegistry.register(deviceInfoTool);
+
+// Register WorkSuite tools
+toolRegistry.register(productionScheduleTool);
+toolRegistry.register(inventoryTool);
+toolRegistry.register(ordersTool);
+toolRegistry.register(customerLookupTool);
+toolRegistry.register(logHarvestTool);
+toolRegistry.register(harvestSummaryTool);
+toolRegistry.register(fieldStatusTool);
 
 export type { ToolDeclaration, ToolHandler, ToolResult, RegisteredTool };
