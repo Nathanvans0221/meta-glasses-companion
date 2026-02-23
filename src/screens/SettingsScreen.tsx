@@ -190,6 +190,68 @@ export function SettingsScreen() {
         </Pressable>
       </SettingsGroup>
 
+      {/* WorkSuite API */}
+      <Text style={[styles.sectionHeader, { color: colors.textSecondary }]}>
+        WORKSUITE API
+      </Text>
+      <SettingsGroup>
+        <View style={styles.inputRow}>
+          <View style={[rowStyles.iconBox, { backgroundColor: '#69936C' }]}>
+            <Ionicons name="server" size={16} color="#FFFFFF" />
+          </View>
+          <View style={styles.inputContent}>
+            <Text style={[rowStyles.label, { color: colors.text }]}>API URL</Text>
+            <TextInput
+              style={[styles.input, { backgroundColor: colors.fill, color: colors.text }]}
+              value={settings.wsapiUrl}
+              onChangeText={(val) => settings.updateSettings({ wsapiUrl: val })}
+              placeholder="https://worksuiteapi.silverfern.app"
+              placeholderTextColor={colors.textTertiary}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+            />
+          </View>
+        </View>
+        <SectionDivider />
+        <View style={styles.inputRow}>
+          <View style={[rowStyles.iconBox, { backgroundColor: '#69936C' }]}>
+            <Ionicons name="lock-closed" size={16} color="#FFFFFF" />
+          </View>
+          <View style={styles.inputContent}>
+            <Text style={[rowStyles.label, { color: colors.text }]}>JWT Token</Text>
+            <TextInput
+              style={[styles.input, { backgroundColor: colors.fill, color: colors.text }]}
+              value={settings.wsapiToken}
+              onChangeText={(val) => settings.updateSettings({ wsapiToken: val })}
+              placeholder="Paste your FusionAuth JWT token"
+              placeholderTextColor={colors.textTertiary}
+              secureTextEntry
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+          </View>
+        </View>
+        <SectionDivider />
+        <View style={styles.inputRow}>
+          <View style={[rowStyles.iconBox, { backgroundColor: '#69936C' }]}>
+            <Ionicons name="business" size={16} color="#FFFFFF" />
+          </View>
+          <View style={styles.inputContent}>
+            <Text style={[rowStyles.label, { color: colors.text }]}>Tenant ID</Text>
+            <TextInput
+              style={[styles.input, { backgroundColor: colors.fill, color: colors.text }]}
+              value={settings.wsapiTenantId}
+              onChangeText={(val) => settings.updateSettings({ wsapiTenantId: val })}
+              placeholder="BPF"
+              placeholderTextColor={colors.textTertiary}
+              autoCapitalize="characters"
+              autoCorrect={false}
+            />
+          </View>
+        </View>
+      </SettingsGroup>
+
       {/* Appearance */}
       <Text style={[styles.sectionHeader, { color: colors.textSecondary }]}>
         APPEARANCE
@@ -261,7 +323,7 @@ export function SettingsScreen() {
           icon="hammer"
           iconColor="#1A93AE"
           label="Enable Voice Tools"
-          description="Time, math, reminders, device info"
+          description="WorkSuite queries, time, math, reminders"
           right={
             <Switch
               value={settings.toolsEnabled}

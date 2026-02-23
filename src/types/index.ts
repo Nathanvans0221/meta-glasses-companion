@@ -30,4 +30,7 @@ export interface AppSettings {
   keepAwake: boolean;
   darkMode: boolean;
   toolsEnabled: boolean;
+  wsapiUrl: string;
+  wsapiToken: string;
+  wsapiTenantId: string;
 }
