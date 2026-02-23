@@ -243,7 +243,7 @@ export function SettingsScreen() {
               style={[styles.input, { backgroundColor: colors.fill, color: colors.text }]}
               value={settings.wsapiTenantId}
               onChangeText={(val) => settings.updateSettings({ wsapiTenantId: val })}
-              placeholder="BPF"
+              placeholder="SFG"
               placeholderTextColor={colors.textTertiary}
               autoCapitalize="characters"
               autoCorrect={false}
