@@ -7,8 +7,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { DevicesScreen } from './src/screens/DevicesScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
+import { LoginScreen } from './src/screens/LoginScreen';
 import { useTheme } from './src/hooks/useTheme';
 import { useSettingsStore } from './src/stores/settingsStore';
+import { useAuthStore } from './src/stores/authStore';
+import { isTokenExpired } from './src/services/auth';
 import { TYPOGRAPHY, SPACING } from './src/design/tokens';
 
 const Tab = createBottomTabNavigator();
@@ -22,6 +25,18 @@ const TAB_ICONS: Record<string, { active: keyof typeof Ionicons.glyphMap; inacti
 export default function App() {
   const colors = useTheme();
   const darkMode = useSettingsStore((s) => s.darkMode);
+  const token = useAuthStore((s) => s.token);
+
+  const isLoggedIn = token !== null && !isTokenExpired(token);
+
+  if (!isLoggedIn) {
+    return (
+      <SafeAreaProvider>
+        <StatusBar style={darkMode ? 'light' : 'dark'} />
+        <LoginScreen />
+      </SafeAreaProvider>
+    );
+  }
 
   return (
     <SafeAreaProvider>

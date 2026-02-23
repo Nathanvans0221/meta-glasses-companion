@@ -1,4 +1,5 @@
 import { useSettingsStore } from '../stores/settingsStore';
+import { getAuthToken } from '../stores/authStore';
 
 interface GraphQLResponse<T = any> {
   data?: T;
@@ -7,7 +8,7 @@ interface GraphQLResponse<T = any> {
 
 /**
  * Lightweight GraphQL client for the WorkSuite API (WSAPI).
- * Reads connection config from the settings store.
+ * Reads URL + tenant from settings, JWT from auth store.
  */
 class WsapiService {
   /**
@@ -18,10 +19,11 @@ class WsapiService {
     queryString: string,
     variables?: Record<string, unknown>,
   ): Promise<T> {
-    const { wsapiUrl, wsapiToken, wsapiTenantId } = useSettingsStore.getState();
+    const { wsapiUrl, wsapiTenantId } = useSettingsStore.getState();
+    const token = getAuthToken();
 
-    if (!wsapiUrl || !wsapiToken) {
-      throw new Error('WorkSuite API not configured — add URL and token in Settings.');
+    if (!wsapiUrl || !token) {
+      throw new Error('WorkSuite API not configured — sign in and check Settings.');
     }
 
     const endpoint = wsapiUrl.endsWith('/graphql')
@@ -32,7 +34,7 @@ class WsapiService {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${wsapiToken}`,
+        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({
         query: queryString,
@@ -59,11 +61,12 @@ class WsapiService {
   }
 
   /**
-   * Check if WSAPI is configured (has URL and token).
+   * Check if WSAPI is configured (has URL and valid auth token).
    */
   isConfigured(): boolean {
-    const { wsapiUrl, wsapiToken } = useSettingsStore.getState();
-    return Boolean(wsapiUrl && wsapiToken);
+    const { wsapiUrl } = useSettingsStore.getState();
+    const token = getAuthToken();
+    return Boolean(wsapiUrl && token);
   }
 }
 

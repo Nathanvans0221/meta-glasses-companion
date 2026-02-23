@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { APP_VERSION } from '../constants';
 import { useSettingsStore } from '../stores/settingsStore';
+import { useAuthStore } from '../stores/authStore';
 import { useConversationStore } from '../stores/conversationStore';
 import { useTheme } from '../hooks/useTheme';
 import { SPACING, TYPOGRAPHY, RADIUS, SIZES } from '../design/tokens';
@@ -109,6 +110,7 @@ const dividerStyles = StyleSheet.create({
 export function SettingsScreen() {
   const colors = useTheme();
   const settings = useSettingsStore();
+  const { user, logout } = useAuthStore();
   const clearMessages = useConversationStore((s) => s.clearMessages);
 
   const handleClearHistory = () => {
@@ -129,11 +131,67 @@ export function SettingsScreen() {
     );
   };
 
+  const handleSignOut = () => {
+    Alert.alert(
+      'Sign Out',
+      'You will need to sign in again to use WorkSuite features.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Sign Out',
+          style: 'destructive',
+          onPress: () => {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+            logout();
+          },
+        },
+      ],
+    );
+  };
+
+  const displayName = user
+    ? [user.firstName, user.lastName].filter(Boolean).join(' ') || user.email
+    : 'Unknown';
+
   return (
     <ScrollView
       style={[styles.container, { backgroundColor: colors.background }]}
       contentContainerStyle={styles.content}
     >
+      {/* Account */}
+      <Text style={[styles.sectionHeader, { color: colors.textSecondary }]}>
+        ACCOUNT
+      </Text>
+      <SettingsGroup>
+        <View style={rowStyles.container}>
+          <View style={[rowStyles.iconBox, { backgroundColor: '#69936C' }]}>
+            <Ionicons name="person" size={16} color="#FFFFFF" />
+          </View>
+          <View style={rowStyles.content}>
+            <Text style={[rowStyles.label, { color: colors.text }]}>
+              {displayName}
+            </Text>
+            {user?.email && (
+              <Text style={[rowStyles.description, { color: colors.textSecondary }]}>
+                {user.email}
+              </Text>
+            )}
+          </View>
+        </View>
+        <SectionDivider />
+        <Pressable
+          style={({ pressed }) => [styles.dangerRow, { opacity: pressed ? 0.6 : 1 }]}
+          onPress={handleSignOut}
+        >
+          <View style={[rowStyles.iconBox, { backgroundColor: colors.error }]}>
+            <Ionicons name="log-out" size={16} color="#FFFFFF" />
+          </View>
+          <Text style={[styles.dangerText, { color: colors.error }]}>
+            Sign Out
+          </Text>
+        </Pressable>
+      </SettingsGroup>
+
       {/* API Configuration */}
       <Text style={[styles.sectionHeader, { color: colors.textSecondary }]}>
         GEMINI API
@@ -210,25 +268,6 @@ export function SettingsScreen() {
               autoCapitalize="none"
               autoCorrect={false}
               keyboardType="url"
-            />
-          </View>
-        </View>
-        <SectionDivider />
-        <View style={styles.inputRow}>
-          <View style={[rowStyles.iconBox, { backgroundColor: '#69936C' }]}>
-            <Ionicons name="lock-closed" size={16} color="#FFFFFF" />
-          </View>
-          <View style={styles.inputContent}>
-            <Text style={[rowStyles.label, { color: colors.text }]}>JWT Token</Text>
-            <TextInput
-              style={[styles.input, { backgroundColor: colors.fill, color: colors.text }]}
-              value={settings.wsapiToken}
-              onChangeText={(val) => settings.updateSettings({ wsapiToken: val })}
-              placeholder="Paste your FusionAuth JWT token"
-              placeholderTextColor={colors.textTertiary}
-              secureTextEntry
-              autoCapitalize="none"
-              autoCorrect={false}
             />
           </View>
         </View>

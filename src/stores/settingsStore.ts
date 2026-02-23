@@ -25,7 +25,6 @@ export const useSettingsStore = create<SettingsStore>()(
       darkMode: true,
       toolsEnabled: true,
       wsapiUrl: 'https://worksuiteapi.silverfern.app',
-      wsapiToken: '',
       wsapiTenantId: 'SFG',
       updateSettings: (partial) => set(partial),
     }),
