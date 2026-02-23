@@ -138,6 +138,18 @@ class GeminiService {
     websocketService.sendAudioChunk(base64Audio);
   }
 
+  /**
+   * Signal to Gemini that the user's audio turn is complete.
+   * Used after streaming audio to tell Gemini to start responding immediately.
+   */
+  sendEndOfTurn(): void {
+    websocketService.send({
+      clientContent: {
+        turnComplete: true,
+      },
+    });
+  }
+
   sendText(text: string): void {
     websocketService.send({
       clientContent: {

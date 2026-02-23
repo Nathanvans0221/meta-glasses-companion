@@ -1,6 +1,5 @@
 import React, { useCallback, useRef, useEffect } from 'react';
 import { Pressable, Text, StyleSheet, Animated, View } from 'react-native';
-import { File as ExpoFile } from 'expo-file-system';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import { useConversationStore } from '../stores/conversationStore';
@@ -59,8 +58,12 @@ export function PushToTalkButton() {
     Animated.spring(scaleAnim, { toValue: 0.9, useNativeDriver: true }).start();
 
     try {
-      await audioService.startRecording();
       setAudioState('recording');
+
+      // Start streaming — each audio chunk is sent to Gemini in real-time
+      await audioService.startStreamingRecording((base64Pcm) => {
+        geminiService.sendAudio(base64Pcm);
+      });
     } catch (err) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       addMessage('system', `Recording error: ${err}`);
@@ -76,13 +79,16 @@ export function PushToTalkButton() {
 
     try {
       setAudioState('processing');
-      const uri = await audioService.stopRecording();
-      if (uri) {
-        const audioFile = new ExpoFile(uri);
-        const base64Audio = await audioFile.base64();
-        addMessage('user', '[Voice message sent]');
-        geminiService.sendAudio(base64Audio);
+
+      // Stop streaming and get chunk count
+      const chunksSent = await audioService.stopStreamingRecording();
+
+      if (chunksSent > 0) {
+        addMessage('user', '[Voice message]');
+        // Tell Gemini the user is done speaking
+        geminiService.sendEndOfTurn();
       } else {
+        // No audio was captured (very quick tap)
         setAudioState('idle');
       }
     } catch (err) {
@@ -93,7 +99,7 @@ export function PushToTalkButton() {
   }, [scaleAnim, setAudioState, addMessage, audioState]);
 
   const stateLabel = isRecording
-    ? 'Listening...'
+    ? 'Streaming...'
     : isProcessing
       ? 'Thinking...'
       : isPlaying

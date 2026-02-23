@@ -109,7 +109,6 @@ export function HomeScreen() {
     });
 
     geminiService.onTurnComplete(async () => {
-      // If there are accumulated audio chunks, try to play them
       if (audioService.hasAudioChunks()) {
         try {
           setAudioState('playing');
@@ -118,6 +117,9 @@ export function HomeScreen() {
           addMessage('system', `Audio playback error: ${err}`);
           setAudioState('idle');
         }
+      } else {
+        // Text-only response — no audio to play, return to idle
+        setAudioState('idle');
       }
     });
 

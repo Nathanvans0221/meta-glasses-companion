@@ -42,8 +42,9 @@ A thin iOS companion app that bridges Meta Ray-Ban smart glasses to cloud AI ser
 - **Expo SDK 54** (managed workflow with config plugins for BLE)
 - **React Native 0.81.5** + TypeScript
 - **react-native-ble-plx** — Bluetooth Low Energy for glasses pairing
-- **expo-av** — Audio capture/playback
-- **expo-file-system** — Reading recorded audio as base64
+- **@mykin-ai/expo-audio-stream** — Real-time audio streaming (mic → base64 PCM chunks)
+- **expo-av** — Audio playback (Gemini response audio)
+- **expo-file-system** — Temp file I/O for audio playback
 - **expo-haptics** — Tactile feedback on interactions
 - **@expo/vector-icons** (Ionicons) — App icons
 - **expo-keep-awake** — Prevents screen sleep during use
@@ -73,9 +74,9 @@ App.tsx (SafeAreaProvider + Bottom Tab Nav)
 
 Services Layer:
 ├── bluetooth.ts — BLE scan/connect via react-native-ble-plx
-├── audio.ts — Record/playback with mode switching
+├── audio.ts — Streaming recording (@mykin-ai/expo-audio-stream) + playback (expo-av)
 ├── websocket.ts — Generic WebSocket with auto-reconnect
-└── gemini.ts — Gemini Live orchestration (connect/setup/send)
+└── gemini.ts — Gemini Live orchestration (connect/setup/send/endOfTurn)
 
 Stores (Zustand):
 ├── settingsStore.ts — API key, model, preferences (persisted to AsyncStorage)
@@ -160,12 +161,14 @@ CI=1 npx eas-cli update --channel preview --message "description of changes"
 - Build: `23e84d4a-88f8-426e-bec3-4aca785e8cfc`
 - Link: https://expo.dev/accounts/nathanvans221/projects/meta-glasses-companion/builds/23e84d4a-88f8-426e-bec3-4aca785e8cfc
 - Includes: Full UI redesign + expo-haptics + vector-icons + voice pipeline + settings persistence
+- **Note:** Audio streaming changes (2026-02-23) add `@mykin-ai/expo-audio-stream` native dep — requires new EAS build before OTA
 
 ---
 
 ## Recent Changes (Latest First)
 
-1. **WorkSuite brand color refinement** — Teal accent `#1A93AE`, WorkSuite text colors, Material palette semantics
+1. **Real-time audio streaming** — Replaced record-then-send with streaming via `@mykin-ai/expo-audio-stream`. Audio chunks sent to Gemini every 200ms during PTT hold. Added `sendEndOfTurn()` for immediate response after release. Fixed text-only response state bug.
+2. **WorkSuite brand color refinement** — Teal accent `#1A93AE`, WorkSuite text colors, Material palette semantics
 2. **Complete UI overhaul** — Design token system, Ionicons, expo-haptics, Apple HIG structure, iMessage-style bubbles, iOS Settings-style grouped rows, pulse animation on PTT
 3. **Voice pipeline wiring** — expo-file-system for base64 audio reading, audio playback state management, onTurnComplete/onPlaybackFinished callbacks
 4. **Settings persistence** — AsyncStorage via zustand persist middleware

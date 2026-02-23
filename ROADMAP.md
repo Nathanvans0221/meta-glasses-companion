@@ -15,7 +15,7 @@
 - [ ] First TestFlight build
 - [ ] Gemini API key configured + tested
 - [ ] Real BLE pairing test with Meta glasses
-- [ ] Audio streaming during recording (currently record-then-send)
+- [x] Audio streaming during recording (real-time 200ms chunks via @mykin-ai/expo-audio-stream)
 - [ ] Persist settings to AsyncStorage
 - [ ] App icon and splash screen design
 

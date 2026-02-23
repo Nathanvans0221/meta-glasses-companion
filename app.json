@@ -62,7 +62,8 @@
           ],
           "bluetoothAlwaysPermission": "WorkSuite Voice needs Bluetooth to connect to Meta Ray-Ban glasses."
         }
-      ]
+      ],
+      "@mykin-ai/expo-audio-stream"
     ],
     "updates": {
       "url": "https://u.expo.dev/530c0bbd-fe42-4480-ae98-9a226e4d09cd",
