@@ -118,11 +118,28 @@ class AudioService {
       onAudioStream: async (event) => {
         if (!this.isStreaming) return;
 
-        // event.data is base64-encoded PCM at the configured sample rate
         const audioData = event.data;
+
         if (typeof audioData === 'string' && audioData.length > 0) {
+          // Base64-encoded PCM — send directly
           this.streamChunksSent++;
           onChunk(audioData);
+        } else if (audioData instanceof Float32Array && audioData.length > 0) {
+          // Float32 samples — convert to 16-bit PCM base64
+          const pcm16 = new Int16Array(audioData.length);
+          for (let i = 0; i < audioData.length; i++) {
+            const s = Math.max(-1, Math.min(1, audioData[i]));
+            pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+          }
+          const bytes = new Uint8Array(pcm16.buffer);
+          let binary = '';
+          const chunkSize = 8192;
+          for (let j = 0; j < bytes.length; j += chunkSize) {
+            const chunk = bytes.subarray(j, Math.min(j + chunkSize, bytes.length));
+            binary += String.fromCharCode.apply(null, Array.from(chunk));
+          }
+          this.streamChunksSent++;
+          onChunk(btoa(binary));
         }
       },
     });

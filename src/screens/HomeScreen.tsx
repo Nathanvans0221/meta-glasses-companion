@@ -132,6 +132,7 @@ export function HomeScreen() {
 
       setWsState('disconnected');
       setSessionActive(false);
+      setAudioState('idle');
 
       // Show diagnostic info on first disconnect so we can debug
       if (reconnectAttempts.current === 0 && duration > 0) {
