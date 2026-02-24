@@ -1,6 +1,8 @@
 import { useSettingsStore } from '../stores/settingsStore';
 import { getAuthToken } from '../stores/authStore';
 
+const REQUEST_TIMEOUT_MS = 8000;
+
 interface GraphQLResponse<T = any> {
   data?: T;
   errors?: Array<{ message: string }>;
@@ -30,34 +32,42 @@ class WsapiService {
       ? wsapiUrl
       : `${wsapiUrl}/graphql`;
 
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        query: queryString,
-        variables: { ...variables, tenantId: wsapiTenantId },
-      }),
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
-    if (!response.ok) {
-      const text = await response.text().catch(() => '');
-      throw new Error(`WSAPI ${response.status}: ${text.slice(0, 200)}`);
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          query: queryString,
+          variables: { ...variables, tenantId: wsapiTenantId },
+        }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => '');
+        throw new Error(`WSAPI ${response.status}: ${text.slice(0, 200)}`);
+      }
+
+      const result: GraphQLResponse<T> = await response.json();
+
+      if (result.errors?.length) {
+        throw new Error(`WSAPI: ${result.errors.map((e) => e.message).join('; ')}`);
+      }
+
+      if (!result.data) {
+        throw new Error('WSAPI returned empty data');
+      }
+
+      return result.data;
+    } finally {
+      clearTimeout(timeout);
     }
-
-    const result: GraphQLResponse<T> = await response.json();
-
-    if (result.errors?.length) {
-      throw new Error(`WSAPI: ${result.errors.map((e) => e.message).join('; ')}`);
-    }
-
-    if (!result.data) {
-      throw new Error('WSAPI returned empty data');
-    }
-
-    return result.data;
   }
 
   /**

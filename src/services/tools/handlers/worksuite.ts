@@ -2,7 +2,7 @@ import type { RegisteredTool } from '../types';
 import { wsapiService } from '../../wsapi';
 
 // ─── Mock Data Fallback ─────────────────────────────────────────────
-// Used when WSAPI is not configured. Gives a demo experience.
+// Used when WSAPI is not configured or when API calls fail.
 
 const MOCK_PRODUCTION = [
   { id: 'PRD-1042', item: 'Roma Tomatoes', quantity: '2,400 lbs', status: 'harvesting', dueDate: 'Today' },
@@ -26,6 +26,13 @@ const MOCK_CUSTOMERS = [
   { name: 'Fresh Market Co-op', contact: 'Maria Santos', phone: '555-0142', terms: 'Net 30', ytdRevenue: '$148,200' },
   { name: 'Valley Grocery Distribution', contact: 'James Chen', phone: '555-0198', terms: 'Net 15', ytdRevenue: '$312,500' },
   { name: 'Riverside Restaurant Group', contact: 'David Park', phone: '555-0176', terms: 'Net 30', ytdRevenue: '$67,800' },
+];
+
+const MOCK_FIELDS = [
+  { field: 'Field 2A', crop: 'Red Onions', stage: 'Mature', issues: 'None' },
+  { field: 'Field 3B', crop: 'Sweet Corn', stage: 'Harvest in progress', issues: 'None' },
+  { field: 'Field 5C', crop: 'Bell Peppers', stage: 'Fruiting', issues: 'Minor aphid pressure' },
+  { field: 'Field 7A', crop: 'Roma Tomatoes', stage: 'Peak harvest', issues: 'Some blossom end rot' },
 ];
 
 // In-memory harvest log
@@ -98,34 +105,6 @@ const CUSTOMER_QUERY = `
   }
 `;
 
-const CUSTOMER_DETAIL_QUERY = `
-  query GetCustomer($tenantId: String!, $customerId: String!) {
-    customer(tenantId: $tenantId, customerId: $customerId) {
-      customerId
-      name
-      description
-      currency
-      status
-      termsId
-      contacts {
-        type
-        firstName
-        lastName
-        title
-        phoneNumbers { type, value }
-        emailAddresses { type, value }
-      }
-      locations {
-        code
-        name
-        storeNumber
-        address { city, stateProvince }
-      }
-      notes { noteText, submitDate }
-    }
-  }
-`;
-
 const WORK_ORDERS_QUERY = `
   query GetWorkOrders($tenantId: String!, $first: Int!) {
     workOrders(
@@ -167,6 +146,24 @@ const LOCATIONS_QUERY = `
   }
 `;
 
+// ─── Helper: try WSAPI, fall back to mock on any error ─────────────
+
+async function tryWsapi(
+  query: string,
+  variables: Record<string, unknown>,
+): Promise<{ data: any; source: 'worksuite' | 'demo' }> {
+  if (!wsapiService.isConfigured()) {
+    return { data: null, source: 'demo' };
+  }
+  try {
+    const result = await wsapiService.query<any>(query, variables);
+    return { data: result, source: 'worksuite' };
+  } catch {
+    // WSAPI failed — fall back to mock data so conversation keeps flowing
+    return { data: null, source: 'demo' };
+  }
+}
+
 // ─── Tool Definitions ───────────────────────────────────────────────
 
 export const productionScheduleTool: RegisteredTool = {
@@ -186,40 +183,36 @@ export const productionScheduleTool: RegisteredTool = {
     },
   },
   handler: async (args) => {
-    if (!wsapiService.isConfigured()) {
-      // Mock fallback
+    const statusArg = String(args.status || 'all');
+
+    const { data, source } = await tryWsapi(WORK_ORDERS_QUERY, { first: 20 });
+
+    if (source === 'demo') {
       let results = [...MOCK_PRODUCTION];
-      const status = String(args.status || 'all').toLowerCase();
-      if (status !== 'all') {
-        results = results.filter((r) => r.status.toLowerCase().includes(status));
+      if (statusArg.toLowerCase() !== 'all') {
+        results = results.filter((r) => r.status.toLowerCase().includes(statusArg.toLowerCase()));
       }
       return { schedule: results, totalJobs: results.length, source: 'demo' };
     }
 
-    try {
-      const data = await wsapiService.query(WORK_ORDERS_QUERY, { first: 20 });
-      const workOrders = data.workOrders?.nodes || [];
+    const workOrders = data.workOrders?.nodes || [];
+    const statusFilter = statusArg.toUpperCase();
+    const filtered = statusFilter === 'ALL'
+      ? workOrders
+      : workOrders.filter((wo: any) => wo.workOrderStatus === statusFilter);
 
-      const statusFilter = String(args.status || 'all').toUpperCase();
-      const filtered = statusFilter === 'ALL'
-        ? workOrders
-        : workOrders.filter((wo: any) => wo.workOrderStatus === statusFilter);
-
-      return {
-        schedule: filtered.map((wo: any) => ({
-          id: wo.erpId || wo.id,
-          status: wo.workOrderStatus,
-          deliveryDate: wo.deliveryDate,
-          planned: wo.productionQuantity,
-          produced: wo.quantityProduced,
-          containers: wo.containerQuantity,
-        })),
-        totalJobs: filtered.length,
-        source: 'worksuite',
-      };
-    } catch (err: any) {
-      return { error: err.message, source: 'worksuite' };
-    }
+    return {
+      schedule: filtered.map((wo: any) => ({
+        id: wo.erpId || wo.id,
+        status: wo.workOrderStatus,
+        deliveryDate: wo.deliveryDate,
+        planned: wo.productionQuantity,
+        produced: wo.quantityProduced,
+        containers: wo.containerQuantity,
+      })),
+      totalJobs: filtered.length,
+      source: 'worksuite',
+    };
   },
 };
 
@@ -240,10 +233,13 @@ export const inventoryTool: RegisteredTool = {
     },
   },
   handler: async (args) => {
-    if (!wsapiService.isConfigured()) {
+    const itemArg = String(args.item || '').toLowerCase();
+
+    const { data, source } = await tryWsapi(ITEMS_QUERY, { first: 50 });
+
+    if (source === 'demo') {
       let results = [...MOCK_INVENTORY];
-      const item = String(args.item || '').toLowerCase();
-      if (item) results = results.filter((r) => r.item.toLowerCase().includes(item));
+      if (itemArg) results = results.filter((r) => r.item.toLowerCase().includes(itemArg));
       const lowStock = results.filter((r) => r.daysSupply <= 2);
       return {
         inventory: results,
@@ -255,30 +251,23 @@ export const inventoryTool: RegisteredTool = {
       };
     }
 
-    try {
-      const data = await wsapiService.query(ITEMS_QUERY, { first: 50 });
-      const items = data.items?.nodes || [];
+    const items = data.items?.nodes || [];
+    const filtered = itemArg
+      ? items.filter((i: any) => i.name?.toLowerCase().includes(itemArg))
+      : items;
 
-      const itemFilter = String(args.item || '').toLowerCase();
-      const filtered = itemFilter
-        ? items.filter((i: any) => i.name?.toLowerCase().includes(itemFilter))
-        : items;
-
-      return {
-        inventory: filtered.map((i: any) => ({
-          name: i.name,
-          sku: i.sku,
-          upc: i.upc,
-          group: i.group,
-          available: i.availableQuantity,
-          categories: i.categories,
-        })),
-        totalItems: filtered.length,
-        source: 'worksuite',
-      };
-    } catch (err: any) {
-      return { error: err.message, source: 'worksuite' };
-    }
+    return {
+      inventory: filtered.map((i: any) => ({
+        name: i.name,
+        sku: i.sku,
+        upc: i.upc,
+        group: i.group,
+        available: i.availableQuantity,
+        categories: i.categories,
+      })),
+      totalItems: filtered.length,
+      source: 'worksuite',
+    };
   },
 };
 
@@ -303,47 +292,43 @@ export const ordersTool: RegisteredTool = {
     },
   },
   handler: async (args) => {
-    if (!wsapiService.isConfigured()) {
+    const statusArg = String(args.status || 'OPEN').toUpperCase();
+    const customerArg = String(args.customer || '').toLowerCase();
+
+    const variables: Record<string, unknown> = { first: 25 };
+    if (statusArg !== 'ALL') {
+      variables.statusFilter = statusArg;
+    }
+
+    const { data, source } = await tryWsapi(ORDERS_QUERY, variables);
+
+    if (source === 'demo') {
       let results = [...MOCK_ORDERS];
-      const customer = String(args.customer || '').toLowerCase();
-      if (customer) results = results.filter((r) => r.customer.toLowerCase().includes(customer));
+      if (customerArg) results = results.filter((r) => r.customer.toLowerCase().includes(customerArg));
       return { orders: results, totalOrders: results.length, source: 'demo' };
     }
 
-    try {
-      const statusFilter = String(args.status || 'OPEN').toUpperCase();
-      const variables: Record<string, unknown> = { first: 25 };
-      if (statusFilter !== 'ALL') {
-        variables.statusFilter = statusFilter;
-      }
-
-      const data = await wsapiService.query(ORDERS_QUERY, variables);
-      let orders = data.orders?.nodes || [];
-
-      const customerFilter = String(args.customer || '').toLowerCase();
-      if (customerFilter) {
-        orders = orders.filter((o: any) =>
-          o.customerName?.toLowerCase().includes(customerFilter),
-        );
-      }
-
-      return {
-        orders: orders.map((o: any) => ({
-          orderNumber: o.orderNumber,
-          customer: o.customerName,
-          status: o.orderStatus,
-          total: o.orderTotal ? `$${o.orderTotal.amount}` : 'N/A',
-          lines: o.numberOfLines,
-          deliveryDate: o.expectedDeliveryDate,
-          created: o.initializedDate,
-        })),
-        totalOrders: orders.length,
-        totalAllOrders: data.orders?.totalCount,
-        source: 'worksuite',
-      };
-    } catch (err: any) {
-      return { error: err.message, source: 'worksuite' };
+    let orders = data.orders?.nodes || [];
+    if (customerArg) {
+      orders = orders.filter((o: any) =>
+        o.customerName?.toLowerCase().includes(customerArg),
+      );
     }
+
+    return {
+      orders: orders.map((o: any) => ({
+        orderNumber: o.orderNumber,
+        customer: o.customerName,
+        status: o.orderStatus,
+        total: o.orderTotal ? `$${o.orderTotal.amount}` : 'N/A',
+        lines: o.numberOfLines,
+        deliveryDate: o.expectedDeliveryDate,
+        created: o.initializedDate,
+      })),
+      totalOrders: orders.length,
+      totalAllOrders: data.orders?.totalCount,
+      source: 'worksuite',
+    };
   },
 };
 
@@ -365,42 +350,38 @@ export const customerLookupTool: RegisteredTool = {
     },
   },
   handler: async (args) => {
-    if (!wsapiService.isConfigured()) {
-      const name = String(args.name || '').toLowerCase();
-      const results = MOCK_CUSTOMERS.filter((c) => c.name.toLowerCase().includes(name));
+    const nameArg = String(args.name || '').toLowerCase();
+
+    const { data, source } = await tryWsapi(CUSTOMER_QUERY, { first: 50 });
+
+    if (source === 'demo') {
+      const results = MOCK_CUSTOMERS.filter((c) => c.name.toLowerCase().includes(nameArg));
       if (results.length === 0) return { found: false, message: `No customer matching "${args.name}"`, source: 'demo' };
       return { found: true, customers: results, source: 'demo' };
     }
 
-    try {
-      const data = await wsapiService.query(CUSTOMER_QUERY, { first: 50 });
-      const customers = data.customers?.nodes || [];
+    const customers = data.customers?.nodes || [];
+    const filtered = customers.filter((c: any) =>
+      c.name?.toLowerCase().includes(nameArg),
+    );
 
-      const nameFilter = String(args.name || '').toLowerCase();
-      const filtered = customers.filter((c: any) =>
-        c.name?.toLowerCase().includes(nameFilter),
-      );
-
-      if (filtered.length === 0) {
-        return { found: false, message: `No customer matching "${args.name}" in WorkSuite`, source: 'worksuite' };
-      }
-
-      return {
-        found: true,
-        customers: filtered.map((c: any) => ({
-          id: c.customerId,
-          name: c.name,
-          erpId: c.erpId,
-          status: c.status,
-          locations: c.numberOfLocations,
-          contacts: c.numberOfContacts,
-        })),
-        count: filtered.length,
-        source: 'worksuite',
-      };
-    } catch (err: any) {
-      return { error: err.message, source: 'worksuite' };
+    if (filtered.length === 0) {
+      return { found: false, message: `No customer matching "${args.name}" in WorkSuite`, source: 'worksuite' };
     }
+
+    return {
+      found: true,
+      customers: filtered.map((c: any) => ({
+        id: c.customerId,
+        name: c.name,
+        erpId: c.erpId,
+        status: c.status,
+        locations: c.numberOfLocations,
+        contacts: c.numberOfContacts,
+      })),
+      count: filtered.length,
+      source: 'worksuite',
+    };
   },
 };
 
@@ -435,7 +416,6 @@ export const logHarvestTool: RegisteredTool = {
     },
   },
   handler: async (args) => {
-    // Harvest logging is local for now — will push to WSAPI when mutation is ready
     const entry = {
       id: `HRV-${String(harvestCounter++).padStart(4, '0')}`,
       item: String(args.item),
@@ -491,40 +471,31 @@ export const fieldStatusTool: RegisteredTool = {
     },
   },
   handler: async (args) => {
-    if (!wsapiService.isConfigured()) {
-      // Mock fallback
-      const fields = [
-        { field: 'Field 2A', crop: 'Red Onions', stage: 'Mature', issues: 'None' },
-        { field: 'Field 3B', crop: 'Sweet Corn', stage: 'Harvest in progress', issues: 'None' },
-        { field: 'Field 5C', crop: 'Bell Peppers', stage: 'Fruiting', issues: 'Minor aphid pressure' },
-        { field: 'Field 7A', crop: 'Roma Tomatoes', stage: 'Peak harvest', issues: 'Some blossom end rot' },
-      ];
-      const q = String(args.field || '').toLowerCase();
-      const results = q ? fields.filter((f) => f.field.toLowerCase().includes(q)) : fields;
+    const fieldArg = String(args.field || '').toLowerCase();
+
+    const { data, source } = await tryWsapi(LOCATIONS_QUERY, { first: 50 });
+
+    if (source === 'demo') {
+      const results = fieldArg
+        ? MOCK_FIELDS.filter((f) => f.field.toLowerCase().includes(fieldArg))
+        : MOCK_FIELDS;
       return { fields: results, totalFields: results.length, source: 'demo' };
     }
 
-    try {
-      const data = await wsapiService.query(LOCATIONS_QUERY, { first: 50 });
-      const locations = data.locations?.nodes || [];
+    const locations = data.locations?.nodes || [];
+    const filtered = fieldArg
+      ? locations.filter((l: any) => l.name?.toLowerCase().includes(fieldArg))
+      : locations;
 
-      const fieldFilter = String(args.field || '').toLowerCase();
-      const filtered = fieldFilter
-        ? locations.filter((l: any) => l.name?.toLowerCase().includes(fieldFilter))
-        : locations;
-
-      return {
-        locations: filtered.map((l: any) => ({
-          name: l.name,
-          type: l.locationType,
-          erpId: l.erpId,
-          status: l.status,
-        })),
-        totalLocations: filtered.length,
-        source: 'worksuite',
-      };
-    } catch (err: any) {
-      return { error: err.message, source: 'worksuite' };
-    }
+    return {
+      locations: filtered.map((l: any) => ({
+        name: l.name,
+        type: l.locationType,
+        erpId: l.erpId,
+        status: l.status,
+      })),
+      totalLocations: filtered.length,
+      source: 'worksuite',
+    };
   },
 };
