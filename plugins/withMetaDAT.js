@@ -17,8 +17,22 @@ const URL_SCHEME = 'worksuitevoice';
 function withMetaDATPackage(config) {
   return withXcodeProject(config, async (config) => {
     const project = config.modResults;
-    const rootObject = project.rootObject;
-    const pbxProject = project.hash.project.objects.PBXProject[rootObject];
+
+    // Find the PBXProject object (defensive — works across xcode lib versions)
+    const pbxProjectSection = project.hash.project.objects.PBXProject || {};
+    let pbxProject;
+    for (const key of Object.keys(pbxProjectSection)) {
+      if (key.endsWith('_comment')) continue;
+      if (typeof pbxProjectSection[key] === 'object') {
+        pbxProject = pbxProjectSection[key];
+        break;
+      }
+    }
+
+    if (!pbxProject) {
+      console.warn('[withMetaDAT] Could not find PBXProject — skipping SPM package injection');
+      return config;
+    }
 
     // Ensure packageReferences array exists
     if (!pbxProject.packageReferences) {
@@ -52,8 +66,18 @@ function withMetaDATPackage(config) {
     pbxProject.packageReferences.push({ value: packageRefUuid, comment: 'meta-wearables-dat-ios' });
 
     // Add package product dependencies to main target
-    const targetUuid = project.getFirstTarget().uuid;
+    const firstTarget = project.getFirstTarget();
+    if (!firstTarget) {
+      console.warn('[withMetaDAT] Could not find first target — skipping product dependencies');
+      return config;
+    }
+    const targetUuid = firstTarget.uuid;
     const target = project.hash.project.objects.PBXNativeTarget[targetUuid];
+
+    if (!target) {
+      console.warn('[withMetaDAT] Could not find PBXNativeTarget — skipping product dependencies');
+      return config;
+    }
 
     if (!target.packageProductDependencies) {
       target.packageProductDependencies = [];
