@@ -1,27 +1,38 @@
 import ExpoModulesCore
+
+#if canImport(MWDATCore)
 import MWDATCore
+#endif
+
+#if canImport(MWDATCamera)
 import MWDATCamera
+#endif
 
 /// Expo native module bridging the Meta Wearables DAT SDK to React Native.
-/// Handles device registration, discovery, camera streaming, and photo capture.
+/// Uses conditional compilation — builds with or without the DAT SDK binary.
+/// When SDK is unavailable, all functions return graceful "unavailable" responses.
 public class MetaGlassesModule: Module {
 
   // MARK: - State
 
   private var isConfigured = false
+
+#if canImport(MWDATCore)
   private var registrationToken: AnyObject?
   private var devicesToken: AnyObject?
+  private var linkStateTokens: [AnyObject] = []
+#endif
+
+#if canImport(MWDATCamera)
   private var streamSession: StreamSession?
   private var deviceSelector: AutoDeviceSelector?
   private var videoFrameToken: AnyObject?
   private var photoDataToken: AnyObject?
   private var stateToken: AnyObject?
   private var errorToken: AnyObject?
-  private var linkStateTokens: [AnyObject] = []
-
-  // Throttle video frames to ~1fps for AI processing
   private var lastFrameSentTime: TimeInterval = 0
   private var frameThrottleInterval: TimeInterval = 1.0
+#endif
 
   // MARK: - Module Definition
 
@@ -41,6 +52,7 @@ public class MetaGlassesModule: Module {
     // ─── SDK Lifecycle ────────────────────────────────────────────
 
     AsyncFunction("configure") { () -> [String: Any] in
+#if canImport(MWDATCore)
       if self.isConfigured {
         return ["status": "already_configured"]
       }
@@ -53,11 +65,15 @@ public class MetaGlassesModule: Module {
       } catch {
         throw Exception(name: "ConfigureError", description: "Failed to configure DAT SDK: \(error)")
       }
+#else
+      return ["status": "unavailable", "reason": "DAT SDK not linked"]
+#endif
     }
 
     // ─── Registration (connects to Meta AI app) ──────────────────
 
     AsyncFunction("startRegistration") { () -> [String: Any] in
+#if canImport(MWDATCore)
       guard self.isConfigured else {
         throw Exception(name: "NotConfigured", description: "Call configure() first")
       }
@@ -67,9 +83,13 @@ public class MetaGlassesModule: Module {
       } catch {
         throw Exception(name: "RegistrationError", description: "\(error)")
       }
+#else
+      return ["status": "unavailable", "reason": "DAT SDK not linked"]
+#endif
     }
 
     AsyncFunction("handleUrl") { (urlString: String) -> Bool in
+#if canImport(MWDATCore)
       guard self.isConfigured, let url = URL(string: urlString) else {
         return false
       }
@@ -84,9 +104,13 @@ public class MetaGlassesModule: Module {
         self.sendEvent("onError", ["error": "handleUrl failed: \(error)"])
         return false
       }
+#else
+      return false
+#endif
     }
 
     AsyncFunction("unregister") { () -> [String: Any] in
+#if canImport(MWDATCore)
       guard self.isConfigured else {
         throw Exception(name: "NotConfigured", description: "Call configure() first")
       }
@@ -96,26 +120,38 @@ public class MetaGlassesModule: Module {
       } catch {
         throw Exception(name: "UnregistrationError", description: "\(error)")
       }
+#else
+      return ["status": "unavailable", "reason": "DAT SDK not linked"]
+#endif
     }
 
     Function("getRegistrationState") { () -> String in
+#if canImport(MWDATCore)
       guard self.isConfigured else { return "unavailable" }
       return self.registrationStateString(Wearables.shared.registrationState)
+#else
+      return "unavailable"
+#endif
     }
 
     // ─── Device Discovery ────────────────────────────────────────
 
     Function("getDevices") { () -> [[String: Any]] in
+#if canImport(MWDATCore)
       guard self.isConfigured else { return [] }
       return Wearables.shared.devices.compactMap { id in
         guard let device = Wearables.shared.deviceForIdentifier(id) else { return nil }
         return self.deviceToDict(device)
       }
+#else
+      return []
+#endif
     }
 
     // ─── Permissions ─────────────────────────────────────────────
 
     AsyncFunction("checkCameraPermission") { () -> String in
+#if canImport(MWDATCore)
       guard self.isConfigured else {
         throw Exception(name: "NotConfigured", description: "Call configure() first")
       }
@@ -125,9 +161,13 @@ public class MetaGlassesModule: Module {
       } catch {
         throw Exception(name: "PermissionError", description: "\(error)")
       }
+#else
+      return "denied"
+#endif
     }
 
     AsyncFunction("requestCameraPermission") { () -> String in
+#if canImport(MWDATCore)
       guard self.isConfigured else {
         throw Exception(name: "NotConfigured", description: "Call configure() first")
       }
@@ -137,16 +177,19 @@ public class MetaGlassesModule: Module {
       } catch {
         throw Exception(name: "PermissionError", description: "\(error)")
       }
+#else
+      return "denied"
+#endif
     }
 
     // ─── Camera Streaming ────────────────────────────────────────
 
     AsyncFunction("startStreaming") { (options: [String: Any]?) -> [String: Any] in
+#if canImport(MWDATCamera)
       guard self.isConfigured else {
         throw Exception(name: "NotConfigured", description: "Call configure() first")
       }
 
-      // Parse options
       let resolutionStr = options?["resolution"] as? String ?? "low"
       let frameRate = options?["frameRate"] as? UInt ?? 24
       let throttle = options?["throttleSeconds"] as? Double ?? 1.0
@@ -160,7 +203,6 @@ public class MetaGlassesModule: Module {
 
       self.frameThrottleInterval = throttle
 
-      // Set up device selector and stream session
       let wearables = Wearables.shared
       let selector = AutoDeviceSelector(wearables: wearables)
       self.deviceSelector = selector
@@ -181,9 +223,13 @@ public class MetaGlassesModule: Module {
       }
 
       return ["status": "streaming_started", "resolution": resolutionStr, "frameRate": Int(frameRate)]
+#else
+      return ["status": "unavailable", "reason": "DAT Camera SDK not linked"]
+#endif
     }
 
     AsyncFunction("stopStreaming") { () -> [String: Any] in
+#if canImport(MWDATCamera)
       guard let session = self.streamSession else {
         return ["status": "not_streaming"]
       }
@@ -194,28 +240,40 @@ public class MetaGlassesModule: Module {
       }
       self.cleanupStream()
       return ["status": "stopped"]
+#else
+      return ["status": "unavailable"]
+#endif
     }
 
     // ─── Photo Capture ───────────────────────────────────────────
 
     Function("capturePhoto") { (format: String?) -> Bool in
+#if canImport(MWDATCamera)
       guard let session = self.streamSession else { return false }
       let photoFormat: PhotoCaptureFormat = format == "heic" ? .heic : .jpeg
       return session.capturePhoto(format: photoFormat)
+#else
+      return false
+#endif
     }
 
     // ─── Cleanup ─────────────────────────────────────────────────
 
     OnDestroy {
+#if canImport(MWDATCamera)
       self.cleanupStream()
+#endif
+#if canImport(MWDATCore)
       self.registrationToken = nil
       self.devicesToken = nil
       self.linkStateTokens.removeAll()
+#endif
     }
   }
 
-  // MARK: - Private Helpers
+  // MARK: - Private Helpers (SDK-dependent)
 
+#if canImport(MWDATCore)
   private func startListeningForRegistrationState() {
     let token = Wearables.shared.addRegistrationStateListener { [weak self] state in
       self?.sendEvent("onRegistrationStateChange", [
@@ -234,7 +292,6 @@ public class MetaGlassesModule: Module {
       }
       self.sendEvent("onDevicesChange", ["devices": devices])
 
-      // Monitor link state for each device
       self.linkStateTokens.removeAll()
       for id in deviceIds {
         guard let device = Wearables.shared.deviceForIdentifier(id) else { continue }
@@ -249,64 +306,6 @@ public class MetaGlassesModule: Module {
       }
     }
     devicesToken = token as AnyObject
-  }
-
-  @MainActor
-  private func subscribeToStreamEvents(_ session: StreamSession) {
-    // Video frames — throttled for AI processing
-    videoFrameToken = session.videoFramePublisher.listen { [weak self] videoFrame in
-      guard let self = self else { return }
-      let now = ProcessInfo.processInfo.systemUptime
-      guard now - self.lastFrameSentTime >= self.frameThrottleInterval else { return }
-      self.lastFrameSentTime = now
-
-      Task { @MainActor in
-        if let image = videoFrame.makeUIImage(),
-           let jpegData = image.jpegData(compressionQuality: 0.5) {
-          let base64 = jpegData.base64EncodedString()
-          self.sendEvent("onVideoFrame", [
-            "base64": base64,
-            "width": Int(image.size.width),
-            "height": Int(image.size.height),
-            "timestamp": now
-          ])
-        }
-      }
-    } as AnyObject
-
-    // Photo capture results
-    photoDataToken = session.photoDataPublisher.listen { [weak self] photoData in
-      let base64 = photoData.data.base64EncodedString()
-      self?.sendEvent("onPhotoCapture", [
-        "base64": base64,
-        "format": photoData.format == .heic ? "heic" : "jpeg"
-      ])
-    } as AnyObject
-
-    // Stream state changes
-    stateToken = session.statePublisher.listen { [weak self] state in
-      self?.sendEvent("onStreamStateChange", [
-        "state": self?.streamStateString(state) ?? "unknown"
-      ])
-    } as AnyObject
-
-    // Errors
-    errorToken = session.errorPublisher.listen { [weak self] error in
-      self?.sendEvent("onError", [
-        "error": "\(error)",
-        "source": "stream"
-      ])
-    } as AnyObject
-  }
-
-  private func cleanupStream() {
-    videoFrameToken = nil
-    photoDataToken = nil
-    stateToken = nil
-    errorToken = nil
-    streamSession = nil
-    deviceSelector = nil
-    lastFrameSentTime = 0
   }
 
   private func deviceToDict(_ device: Device) -> [String: Any] {
@@ -358,6 +357,62 @@ public class MetaGlassesModule: Module {
     @unknown default: return "unknown"
     }
   }
+#endif
+
+#if canImport(MWDATCamera)
+  @MainActor
+  private func subscribeToStreamEvents(_ session: StreamSession) {
+    videoFrameToken = session.videoFramePublisher.listen { [weak self] videoFrame in
+      guard let self = self else { return }
+      let now = ProcessInfo.processInfo.systemUptime
+      guard now - self.lastFrameSentTime >= self.frameThrottleInterval else { return }
+      self.lastFrameSentTime = now
+
+      Task { @MainActor in
+        if let image = videoFrame.makeUIImage(),
+           let jpegData = image.jpegData(compressionQuality: 0.5) {
+          let base64 = jpegData.base64EncodedString()
+          self.sendEvent("onVideoFrame", [
+            "base64": base64,
+            "width": Int(image.size.width),
+            "height": Int(image.size.height),
+            "timestamp": now
+          ])
+        }
+      }
+    } as AnyObject
+
+    photoDataToken = session.photoDataPublisher.listen { [weak self] photoData in
+      let base64 = photoData.data.base64EncodedString()
+      self?.sendEvent("onPhotoCapture", [
+        "base64": base64,
+        "format": photoData.format == .heic ? "heic" : "jpeg"
+      ])
+    } as AnyObject
+
+    stateToken = session.statePublisher.listen { [weak self] state in
+      self?.sendEvent("onStreamStateChange", [
+        "state": self?.streamStateString(state) ?? "unknown"
+      ])
+    } as AnyObject
+
+    errorToken = session.errorPublisher.listen { [weak self] error in
+      self?.sendEvent("onError", [
+        "error": "\(error)",
+        "source": "stream"
+      ])
+    } as AnyObject
+  }
+
+  private func cleanupStream() {
+    videoFrameToken = nil
+    photoDataToken = nil
+    stateToken = nil
+    errorToken = nil
+    streamSession = nil
+    deviceSelector = nil
+    lastFrameSentTime = 0
+  }
 
   private func streamStateString(_ state: StreamSessionState) -> String {
     switch state {
@@ -370,4 +425,5 @@ public class MetaGlassesModule: Module {
     @unknown default: return "unknown"
     }
   }
+#endif
 }
