@@ -139,6 +139,23 @@ class GeminiService {
   }
 
   /**
+   * Send a JPEG image frame to Gemini for visual analysis.
+   * Used for glasses camera streaming — Gemini sees what the user sees.
+   */
+  sendImage(base64Jpeg: string): void {
+    websocketService.send({
+      realtimeInput: {
+        mediaChunks: [
+          {
+            mimeType: 'image/jpeg',
+            data: base64Jpeg,
+          },
+        ],
+      },
+    });
+  }
+
+  /**
    * Signal to Gemini that the user's audio turn is complete.
    * Used after streaming audio to tell Gemini to start responding immediately.
    */
@@ -218,7 +235,18 @@ class GeminiService {
       '- For yes/no questions, lead with yes or no.\n' +
       '- When there\'s a problem, state it plainly and suggest next steps.\n' +
       '- Don\'t narrate your tool usage. Just use the tool and speak the result naturally.\n' +
-      '- Never say "I don\'t have access to WorkSuite" — you ARE WorkSuite.';
+      '- Never say "I don\'t have access to WorkSuite" — you ARE WorkSuite.\n\n' +
+      'VISION (GLASSES CAMERA):\n' +
+      '- You can see through the user\'s Meta Ray-Ban glasses via the camera feed.\n' +
+      '- Image frames are sent periodically (~1 per second) so you have continuous visual context.\n' +
+      '- When the user asks "what am I looking at?", "what\'s this?", "identify this plant", etc. — ' +
+      'use the latest camera image to answer.\n' +
+      '- You can also use the capture_photo tool to take a high-resolution snapshot.\n' +
+      '- For field inspections, identify: crop type, growth stage, pest/disease signs, weed pressure, ' +
+      'irrigation issues, equipment condition.\n' +
+      '- For packhouse/warehouse, identify: product type, packaging, labels, equipment, safety issues.\n' +
+      '- Be specific and actionable: "That looks like early blight on the lower tomato leaves — ' +
+      'you might want to apply a copper fungicide" not "I see a plant with spots."';
 
     if (config.toolsEnabled === false || toolRegistry.size === 0) {
       return base;
@@ -238,7 +266,8 @@ class GeminiService {
       '- get_current_datetime: Current date and time\n' +
       '- calculate: Math calculations\n' +
       '- set_reminder / list_reminders: Voice reminders\n' +
-      '- get_device_info: Device details\n\n' +
+      '- get_device_info: Device details\n' +
+      '- capture_photo: Take a high-res photo from glasses camera\n\n' +
       'Always use the appropriate tool rather than guessing data. ' +
       'After receiving the tool result, speak the answer naturally and concisely. ' +
       'If the user asks a general farming/growing question (not specific to their data), ' +

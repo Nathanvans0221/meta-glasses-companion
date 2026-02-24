@@ -11,6 +11,7 @@ import { useSettingsStore } from '../stores/settingsStore';
 import { geminiService } from '../services/gemini';
 import { audioService } from '../services/audio';
 import { websocketService } from '../services/websocket';
+import { glassesService } from '../services/glasses';
 import { useTheme } from '../hooks/useTheme';
 import { SPACING, TYPOGRAPHY, RADIUS, SIZES } from '../design/tokens';
 
@@ -32,6 +33,7 @@ export function HomeScreen() {
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const connectedAt = useRef<number>(0);
   const handsFreeActive = useRef(false);
+  const cameraStreamActive = useRef(false);
 
   useEffect(() => {
     if (keepAwake) {
@@ -90,6 +92,82 @@ export function HomeScreen() {
     return () => subscription.remove();
   }, [startHandsFreeListening]);
 
+  // ─── Glasses camera: stream frames to Gemini ─────────────────────
+
+  const startCameraStream = useCallback(async () => {
+    if (cameraStreamActive.current) return;
+    if (!glassesService.isConfigured()) return;
+
+    const regState = glassesService.getRegistrationState();
+    if (regState !== 'registered') return;
+
+    try {
+      const perm = await glassesService.checkCameraPermission();
+      if (perm !== 'granted') {
+        const requested = await glassesService.requestCameraPermission();
+        if (requested !== 'granted') {
+          addMessage('system', 'Camera permission denied on glasses.');
+          return;
+        }
+      }
+
+      cameraStreamActive.current = true;
+      await glassesService.startCameraStream({
+        resolution: 'low',
+        frameRate: 24,
+        throttleSeconds: 1.0,
+      });
+      addMessage('system', 'Glasses camera active — Ferny can see what you see.');
+    } catch (err) {
+      cameraStreamActive.current = false;
+      addMessage('system', `Camera stream error: ${err}`);
+    }
+  }, [addMessage]);
+
+  const stopCameraStream = useCallback(async () => {
+    if (!cameraStreamActive.current) return;
+    cameraStreamActive.current = false;
+    try {
+      await glassesService.stopCameraStream();
+    } catch {
+      // Ignore
+    }
+  }, []);
+
+  // Forward glasses camera frames + photos to Gemini
+  useEffect(() => {
+    const unsubs: Array<() => void> = [];
+
+    // Video frames → Gemini multimodal input
+    unsubs.push(
+      glassesService.onVideoFrame((frame) => {
+        if (geminiService.isConnected()) {
+          geminiService.sendImage(frame.base64);
+        }
+      }),
+    );
+
+    // High-res photo captures → Gemini multimodal input
+    unsubs.push(
+      glassesService.onPhotoCapture((photo) => {
+        if (geminiService.isConnected()) {
+          geminiService.sendImage(photo.base64);
+        }
+      }),
+    );
+
+    // Auto-start camera when glasses connect (if Gemini is also connected)
+    unsubs.push(
+      glassesService.onRegistrationStateChange((state) => {
+        if (state === 'registered' && geminiService.isConnected()) {
+          startCameraStream();
+        }
+      }),
+    );
+
+    return () => unsubs.forEach((fn) => fn());
+  }, [startCameraStream]);
+
   // ─── Reconnection logic ───────────────────────────────────────────
 
   const scheduleReconnect = useCallback(() => {
@@ -139,6 +217,11 @@ export function HomeScreen() {
       } else {
         addMessage('system', wasReconnect ? 'Reconnected.' : 'Connected. Ready for voice input.');
       }
+
+      // Start glasses camera stream if DAT SDK is registered
+      if (glassesService.getRegistrationState() === 'registered') {
+        startCameraStream();
+      }
     } catch (err: any) {
       if (!isAutoReconnect) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -147,7 +230,7 @@ export function HomeScreen() {
         scheduleReconnect();
       }
     }
-  }, [apiKey, geminiModel, addMessage, scheduleReconnect, startHandsFreeListening]);
+  }, [apiKey, geminiModel, addMessage, scheduleReconnect, startHandsFreeListening, startCameraStream]);
 
   // ─── Wire up Gemini callbacks ─────────────────────────────────────
 
@@ -219,6 +302,9 @@ export function HomeScreen() {
         audioService.stopStreamingRecording().catch(() => {});
       }
 
+      // Stop glasses camera stream on disconnect
+      stopCameraStream();
+
       setWsState('disconnected');
       setSessionActive(false);
       setAudioState('idle');
@@ -249,6 +335,7 @@ export function HomeScreen() {
         handsFreeActive.current = false;
         audioService.stopStreamingRecording().catch(() => {});
       }
+      stopCameraStream();
       audioService.cleanup();
       geminiService.disconnect();
       if (reconnectTimer.current) {

@@ -12,6 +12,7 @@ import {
   setReminderTool,
   listRemindersTool,
   deviceInfoTool,
+  capturePhotoTool,
   productionScheduleTool,
   inventoryTool,
   ordersTool,
@@ -95,6 +96,7 @@ toolRegistry.register(mathTool);
 toolRegistry.register(setReminderTool);
 toolRegistry.register(listRemindersTool);
 toolRegistry.register(deviceInfoTool);
+toolRegistry.register(capturePhotoTool);
 
 // Register WorkSuite tools
 toolRegistry.register(productionScheduleTool);
