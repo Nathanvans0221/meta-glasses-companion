@@ -102,7 +102,7 @@ class AudioService {
   private streamChunksSent = 0;
 
   async initialize(): Promise<void> {
-    // Set audio mode for playback (recording is handled by expo-audio-stream)
+    // Set audio mode for playback initially
     await Audio.setAudioModeAsync({
       allowsRecordingIOS: false,
       playsInSilentModeIOS: true,
@@ -118,6 +118,33 @@ class AudioService {
   }
 
   /**
+   * Switch iOS audio session to recording mode.
+   * Must be called before startStreamingRecording to keep
+   * the audio session active in background.
+   */
+  async setRecordingMode(): Promise<void> {
+    await Audio.setAudioModeAsync({
+      allowsRecordingIOS: true,
+      playsInSilentModeIOS: true,
+      staysActiveInBackground: true,
+      shouldDuckAndroid: true,
+    });
+  }
+
+  /**
+   * Switch iOS audio session back to playback mode.
+   * Called before playing Gemini response audio.
+   */
+  async setPlaybackMode(): Promise<void> {
+    await Audio.setAudioModeAsync({
+      allowsRecordingIOS: false,
+      playsInSilentModeIOS: true,
+      staysActiveInBackground: true,
+      shouldDuckAndroid: true,
+    });
+  }
+
+  /**
    * Start streaming audio recording. Chunks are delivered in real-time
    * via the onChunk callback as base64-encoded 16kHz mono PCM.
    */
@@ -130,6 +157,9 @@ class AudioService {
 
     this.streamChunksSent = 0;
     this.isStreaming = true;
+
+    // Switch to recording audio session so iOS keeps us alive in background
+    await this.setRecordingMode();
 
     const { subscription } = await ExpoPlayAudioStream.startRecording({
       sampleRate: 16000,

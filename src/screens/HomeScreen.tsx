@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useCallback } from 'react';
-import { View, StyleSheet, TextInput, Pressable, Text, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, StyleSheet, TextInput, Pressable, Text, KeyboardAvoidingView, Platform, AppState } from 'react-native';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
@@ -74,6 +74,21 @@ export function HomeScreen() {
     }
     setAudioState('idle');
   }, [setAudioState]);
+
+  // ─── AppState: resume hands-free recording when returning from background ──
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') {
+        // App came back to foreground — resume hands-free if it was interrupted
+        const handsFree = useSettingsStore.getState().handsFreeMode;
+        if (handsFree && geminiService.isConnected() && !handsFreeActive.current) {
+          setTimeout(() => startHandsFreeListening(), 500);
+        }
+      }
+    });
+    return () => subscription.remove();
+  }, [startHandsFreeListening]);
 
   // ─── Reconnection logic ───────────────────────────────────────────
 
