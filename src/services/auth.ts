@@ -2,6 +2,7 @@ import { useSettingsStore } from '../stores/settingsStore';
 
 const FUSIONAUTH_URL = 'https://auth.silverfern.app';
 const APPLICATION_ID = '4f8a80bc-8d41-48dd-81cd-9580a6b7c610';
+const API_KEY = 'Wqbx4M_8N1LycUVmOxGU9AS2Xu3lFbzr4E8oYIYqO1bK2w6yAjmaM26a';
 
 interface FusionAuthLoginResponse {
   token: string;
@@ -39,7 +40,10 @@ export async function login(
 }> {
   const response = await fetch(`${FUSIONAUTH_URL}/api/login`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: API_KEY,
+    },
     body: JSON.stringify({
       loginId: email,
       password,
