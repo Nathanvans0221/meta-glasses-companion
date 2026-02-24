@@ -335,8 +335,10 @@ class GeminiService {
         if (part.inlineData?.data) {
           this.audioCallback?.(part.inlineData.data);
         }
-        // Show Gemini's text responses in transcript (for chat review)
-        if (part.text) {
+        // In audio mode, part.text is internal planning/thinking — skip it.
+        // Actual spoken response is in the audio data; we add a transcript
+        // placeholder from the caller when audio playback finishes.
+        if (part.text && !this.audioMode) {
           this.transcriptCallback?.(part.text, 'assistant');
         }
       }

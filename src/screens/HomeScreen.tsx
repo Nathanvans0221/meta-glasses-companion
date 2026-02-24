@@ -255,11 +255,14 @@ export function HomeScreen() {
 
     geminiService.onAudioResponse((base64Audio) => {
       // In hands-free mode, stop recording when Gemini starts responding
-      // to avoid echo feedback
+      // to avoid echo feedback. This block runs once per turn (handsFreeActive
+      // is set false on the first audio chunk).
       if (handsFreeActive.current) {
         handsFreeActive.current = false;
         audioService.stopStreamingRecording().catch(() => {});
         setAudioState('processing');
+        addMessage('user', '[Voice message]');
+        addMessage('assistant', 'On it...');
       }
 
       audioService.addAudioChunk(base64Audio);
@@ -269,6 +272,7 @@ export function HomeScreen() {
       if (audioService.hasAudioChunks()) {
         try {
           setAudioState('playing');
+          addMessage('assistant', '🔊 [Audio response]');
           await audioService.playAccumulatedAudio();
         } catch (err) {
           addMessage('system', `Audio playback error: ${err}`);
