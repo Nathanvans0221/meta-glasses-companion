@@ -65,7 +65,8 @@
         }
       ],
       "@mykin-ai/expo-audio-stream",
-      "./plugins/withMetaDAT"
+      "./plugins/withMetaDAT",
+      "expo-font"
     ],
     "scheme": "worksuitevoice",
     "updates": {

@@ -335,9 +335,8 @@ class GeminiService {
         if (part.inlineData?.data) {
           this.audioCallback?.(part.inlineData.data);
         }
-        // In audio mode, part.text is internal planning — skip it.
-        // Only show text responses when NOT in audio mode.
-        if (part.text && !this.audioMode) {
+        // Show Gemini's text responses in transcript (for chat review)
+        if (part.text) {
           this.transcriptCallback?.(part.text, 'assistant');
         }
       }

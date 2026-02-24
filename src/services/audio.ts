@@ -273,9 +273,11 @@ class AudioService {
         await this.sound.unloadAsync();
       }
 
-      // Switch to playback mode
+      // Keep playAndRecord category (allowsRecordingIOS: true) so audio
+      // plays even when the app is backgrounded / phone is sleeping.
+      // The .playAndRecord session supports playback and stays alive in background.
       await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
+        allowsRecordingIOS: true,
         playsInSilentModeIOS: true,
         staysActiveInBackground: true,
         shouldDuckAndroid: true,

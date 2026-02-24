@@ -88,6 +88,7 @@ export function PushToTalkButton() {
       if (chunksSent > 0) {
         setAudioState('processing');
         addMessage('user', '[Voice message]');
+        addMessage('assistant', 'On it...');
       } else {
         setAudioState('idle');
       }
