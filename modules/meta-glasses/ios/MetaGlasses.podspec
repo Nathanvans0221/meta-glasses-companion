@@ -11,5 +11,7 @@ Pod::Spec.new do |s|
   s.source_files   = '**/*.swift'
   s.swift_version  = '5.9'
 
+  s.vendored_frameworks = 'MWDATCore.xcframework', 'MWDATCamera.xcframework'
+
   s.dependency 'ExpoModulesCore'
 end
