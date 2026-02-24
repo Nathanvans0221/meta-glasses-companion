@@ -30,6 +30,7 @@ export interface AppSettings {
   keepAwake: boolean;
   darkMode: boolean;
   toolsEnabled: boolean;
+  handsFreeMode: boolean;
   wsapiUrl: string;
   wsapiTenantId: string;
 }

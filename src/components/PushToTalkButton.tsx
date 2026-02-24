@@ -3,6 +3,7 @@ import { Pressable, Text, StyleSheet, Animated, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import { useConversationStore } from '../stores/conversationStore';
+import { useSettingsStore } from '../stores/settingsStore';
 import { audioService } from '../services/audio';
 import { geminiService } from '../services/gemini';
 import { useTheme } from '../hooks/useTheme';
@@ -14,6 +15,7 @@ export function PushToTalkButton() {
   const setAudioState = useConversationStore((s) => s.setAudioState);
   const addMessage = useConversationStore((s) => s.addMessage);
   const wsState = useConversationStore((s) => s.wsState);
+  const handsFreeMode = useSettingsStore((s) => s.handsFreeMode);
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const glowAnim = useRef(new Animated.Value(0)).current;
@@ -46,7 +48,9 @@ export function PushToTalkButton() {
     }
   }, [isRecording, pulseAnim, glowAnim]);
 
+  // ─── Push-to-Talk handlers (manual mode) ──────────────────────────
   const handlePressIn = useCallback(async () => {
+    if (handsFreeMode) return; // Hands-free handles recording differently
     if (wsState !== 'connected') {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       addMessage('system', 'Connect to AI first before using voice input.');
@@ -59,8 +63,6 @@ export function PushToTalkButton() {
 
     try {
       setAudioState('recording');
-
-      // Start streaming — each audio chunk is sent to Gemini in real-time
       await audioService.startStreamingRecording((base64Pcm) => {
         geminiService.sendAudio(base64Pcm);
       });
@@ -69,16 +71,16 @@ export function PushToTalkButton() {
       addMessage('system', `Recording error: ${err}`);
       setAudioState('idle');
     }
-  }, [scaleAnim, setAudioState, addMessage, wsState, audioState]);
+  }, [scaleAnim, setAudioState, addMessage, wsState, audioState, handsFreeMode]);
 
   const handlePressOut = useCallback(async () => {
+    if (handsFreeMode) return;
     if (audioState !== 'recording') return;
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true }).start();
 
     try {
-      // Stop streaming and send silence to trigger Gemini's VAD
       const chunksSent = await audioService.stopStreamingRecording(
         (silencePcm) => geminiService.sendAudio(silencePcm),
       );
@@ -87,7 +89,6 @@ export function PushToTalkButton() {
         setAudioState('processing');
         addMessage('user', '[Voice message]');
       } else {
-        // No audio was captured (very quick tap)
         setAudioState('idle');
       }
     } catch (err) {
@@ -95,15 +96,27 @@ export function PushToTalkButton() {
       addMessage('system', `Processing error: ${err}`);
       setAudioState('idle');
     }
-  }, [scaleAnim, setAudioState, addMessage, audioState]);
+  }, [scaleAnim, setAudioState, addMessage, audioState, handsFreeMode]);
 
-  const stateLabel = isRecording
-    ? 'Streaming...'
-    : isProcessing
-      ? 'Thinking...'
-      : isPlaying
-        ? 'Speaking...'
-        : 'Hold to Talk';
+  // ─── Labels and visuals ───────────────────────────────────────────
+
+  const stateLabel = handsFreeMode
+    ? isRecording
+      ? 'Listening...'
+      : isProcessing
+        ? 'Thinking...'
+        : isPlaying
+          ? 'Speaking...'
+          : wsState === 'connected'
+            ? 'Ready'
+            : 'Not Connected'
+    : isRecording
+      ? 'Streaming...'
+      : isProcessing
+        ? 'Thinking...'
+        : isPlaying
+          ? 'Speaking...'
+          : 'Hold to Talk';
 
   const iconName = isRecording
     ? 'radio'
@@ -111,13 +124,17 @@ export function PushToTalkButton() {
       ? 'hourglass'
       : isPlaying
         ? 'volume-high'
-        : 'mic';
+        : handsFreeMode
+          ? 'headset'
+          : 'mic';
 
   const buttonColor = isRecording
-    ? colors.error
+    ? handsFreeMode ? colors.success : colors.error
     : isDisabled
       ? colors.fill
       : colors.accent;
+
+  const ringColor = handsFreeMode ? colors.success : colors.error;
 
   return (
     <View style={styles.wrapper}>
@@ -126,7 +143,7 @@ export function PushToTalkButton() {
         style={[
           styles.outerRing,
           {
-            borderColor: colors.error,
+            borderColor: ringColor,
             opacity: glowAnim,
             transform: [{ scale: pulseAnim }],
           },
@@ -136,8 +153,8 @@ export function PushToTalkButton() {
 
       <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
         <Pressable
-          onPressIn={handlePressIn}
-          onPressOut={handlePressOut}
+          onPressIn={handsFreeMode ? undefined : handlePressIn}
+          onPressOut={handsFreeMode ? undefined : handlePressOut}
           style={[styles.button, { backgroundColor: buttonColor }]}
           accessibilityLabel={stateLabel}
           accessibilityRole="button"

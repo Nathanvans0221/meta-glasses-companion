@@ -351,6 +351,23 @@ export function SettingsScreen() {
             />
           }
         />
+        <SectionDivider />
+        <SettingsRow
+          icon="headset"
+          iconColor="#4CAF50"
+          label="Hands-Free Mode"
+          description="Always-on listening for glasses"
+          right={
+            <Switch
+              value={settings.handsFreeMode}
+              onValueChange={(val) => {
+                Haptics.selectionAsync();
+                settings.updateSettings({ handsFreeMode: val });
+              }}
+              trackColor={{ false: colors.fill, true: colors.accent }}
+            />
+          }
+        />
       </SettingsGroup>
 
       {/* Tools */}

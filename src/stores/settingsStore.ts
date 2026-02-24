@@ -24,6 +24,7 @@ export const useSettingsStore = create<SettingsStore>()(
       keepAwake: true,
       darkMode: true,
       toolsEnabled: true,
+      handsFreeMode: false,
       wsapiUrl: 'https://worksuiteapi.silverfern.app',
       wsapiTenantId: 'SFG',
       updateSettings: (partial) => set(partial),

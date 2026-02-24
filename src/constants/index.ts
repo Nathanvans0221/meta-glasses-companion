@@ -1,7 +1,7 @@
 // Meta Ray-Ban glasses BLE service UUIDs
 // These will need to be updated with actual Meta DAT SDK values
 export const META_GLASSES_SERVICE_UUID = '0000180d-0000-1000-8000-00805f9b34fb';
-export const META_GLASSES_NAME_PREFIX = 'Ray-Ban';
+export const META_GLASSES_NAME_PREFIX = 'Wayfarer';
 
 // App version — lives in JS so OTA updates reflect it immediately
 export const APP_VERSION = '1.0.0';

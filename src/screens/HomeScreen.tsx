@@ -26,10 +26,12 @@ export function HomeScreen() {
   const apiKey = useSettingsStore((s) => s.geminiApiKey);
   const geminiModel = useSettingsStore((s) => s.geminiModel);
   const toolsEnabled = useSettingsStore((s) => s.toolsEnabled);
+  const handsFreeMode = useSettingsStore((s) => s.handsFreeMode);
   const [textInput, setTextInput] = React.useState('');
   const reconnectAttempts = useRef(0);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const connectedAt = useRef<number>(0);
+  const handsFreeActive = useRef(false);
 
   useEffect(() => {
     if (keepAwake) {
@@ -40,6 +42,40 @@ export function HomeScreen() {
   }, [keepAwake]);
 
   const setAudioState = useConversationStore((s) => s.setAudioState);
+
+  // ─── Hands-free: start continuous recording ───────────────────────
+
+  const startHandsFreeListening = useCallback(async () => {
+    if (handsFreeActive.current) return;
+    if (!geminiService.isConnected()) return;
+
+    handsFreeActive.current = true;
+    setAudioState('recording');
+
+    try {
+      await audioService.startStreamingRecording((base64Pcm) => {
+        geminiService.sendAudio(base64Pcm);
+      });
+    } catch (err) {
+      handsFreeActive.current = false;
+      addMessage('system', `Hands-free mic error: ${err}`);
+      setAudioState('idle');
+    }
+  }, [setAudioState, addMessage]);
+
+  const stopHandsFreeListening = useCallback(async () => {
+    if (!handsFreeActive.current) return;
+    handsFreeActive.current = false;
+
+    try {
+      await audioService.stopStreamingRecording();
+    } catch {
+      // Ignore
+    }
+    setAudioState('idle');
+  }, [setAudioState]);
+
+  // ─── Reconnection logic ───────────────────────────────────────────
 
   const scheduleReconnect = useCallback(() => {
     if (reconnectAttempts.current >= MAX_AUTO_RECONNECT_ATTEMPTS) {
@@ -79,17 +115,26 @@ export function HomeScreen() {
       if (!isAutoReconnect) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
-      addMessage('system', wasReconnect ? 'Reconnected.' : 'Connected. Ready for voice input.');
+
+      const handsFree = useSettingsStore.getState().handsFreeMode;
+      if (handsFree) {
+        addMessage('system', wasReconnect ? 'Reconnected. Listening...' : 'Connected. Hands-free listening active.');
+        // Small delay to let audio session settle
+        setTimeout(() => startHandsFreeListening(), 500);
+      } else {
+        addMessage('system', wasReconnect ? 'Reconnected.' : 'Connected. Ready for voice input.');
+      }
     } catch (err: any) {
       if (!isAutoReconnect) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
         addMessage('system', `Connection failed: ${err.message}`);
       } else {
-        // Auto-reconnect failed — schedule another retry
         scheduleReconnect();
       }
     }
-  }, [apiKey, geminiModel, addMessage, scheduleReconnect]);
+  }, [apiKey, geminiModel, addMessage, scheduleReconnect, startHandsFreeListening]);
+
+  // ─── Wire up Gemini callbacks ─────────────────────────────────────
 
   useEffect(() => {
     audioService.initialize().catch((err) => {
@@ -98,6 +143,12 @@ export function HomeScreen() {
 
     audioService.onPlaybackFinished(() => {
       setAudioState('idle');
+
+      // In hands-free mode, auto-restart listening after playback finishes
+      const handsFree = useSettingsStore.getState().handsFreeMode;
+      if (handsFree && geminiService.isConnected()) {
+        setTimeout(() => startHandsFreeListening(), 300);
+      }
     });
 
     geminiService.onTranscript((text, role) => {
@@ -105,6 +156,14 @@ export function HomeScreen() {
     });
 
     geminiService.onAudioResponse((base64Audio) => {
+      // In hands-free mode, stop recording when Gemini starts responding
+      // to avoid echo feedback
+      if (handsFreeActive.current) {
+        handsFreeActive.current = false;
+        audioService.stopStreamingRecording().catch(() => {});
+        setAudioState('processing');
+      }
+
       audioService.addAudioChunk(base64Audio);
     });
 
@@ -116,25 +175,39 @@ export function HomeScreen() {
         } catch (err) {
           addMessage('system', `Audio playback error: ${err}`);
           setAudioState('idle');
+          // Try to resume hands-free listening even after playback error
+          const handsFree = useSettingsStore.getState().handsFreeMode;
+          if (handsFree && geminiService.isConnected()) {
+            setTimeout(() => startHandsFreeListening(), 300);
+          }
         }
       } else {
-        // Text-only response — no audio to play, return to idle
         setAudioState('idle');
+        // No audio response — resume listening in hands-free mode
+        const handsFree = useSettingsStore.getState().handsFreeMode;
+        if (handsFree && geminiService.isConnected()) {
+          setTimeout(() => startHandsFreeListening(), 300);
+        }
       }
     });
 
-    // Handle unexpected disconnects — auto-reconnect with session resumption
+    // Handle unexpected disconnects
     geminiService.onDisconnect((detail) => {
       const duration = connectedAt.current
         ? Math.round((Date.now() - connectedAt.current) / 1000)
         : 0;
       connectedAt.current = 0;
 
+      // Stop hands-free recording on disconnect
+      if (handsFreeActive.current) {
+        handsFreeActive.current = false;
+        audioService.stopStreamingRecording().catch(() => {});
+      }
+
       setWsState('disconnected');
       setSessionActive(false);
       setAudioState('idle');
 
-      // Show diagnostic info on first disconnect so we can debug
       if (reconnectAttempts.current === 0 && duration > 0) {
         const closeCode = websocketService.lastCloseCode;
         const closeReason = websocketService.lastCloseReason;
@@ -157,6 +230,10 @@ export function HomeScreen() {
 
     return () => {
       unsub();
+      if (handsFreeActive.current) {
+        handsFreeActive.current = false;
+        audioService.stopStreamingRecording().catch(() => {});
+      }
       audioService.cleanup();
       geminiService.disconnect();
       if (reconnectTimer.current) {
@@ -219,34 +296,36 @@ export function HomeScreen() {
       <View style={[styles.inputArea, { backgroundColor: colors.primary, borderTopColor: colors.separator }]}>
         <PushToTalkButton />
 
-        <View style={styles.textInputRow}>
-          <TextInput
-            style={[styles.textInput, { backgroundColor: colors.fill, color: colors.text }]}
-            value={textInput}
-            onChangeText={setTextInput}
-            placeholder="Or type a message..."
-            placeholderTextColor={colors.textTertiary}
-            onSubmitEditing={sendTextMessage}
-            returnKeyType="send"
-          />
-          <Pressable
-            style={({ pressed }) => [
-              styles.sendButton,
-              {
-                backgroundColor: textInput.trim() ? colors.accent : colors.fill,
-                opacity: pressed && textInput.trim() ? 0.7 : 1,
-              },
-            ]}
-            onPress={sendTextMessage}
-            disabled={!textInput.trim()}
-          >
-            <Ionicons
-              name="arrow-up"
-              size={20}
-              color={textInput.trim() ? '#FFFFFF' : colors.textTertiary}
+        {!handsFreeMode && (
+          <View style={styles.textInputRow}>
+            <TextInput
+              style={[styles.textInput, { backgroundColor: colors.fill, color: colors.text }]}
+              value={textInput}
+              onChangeText={setTextInput}
+              placeholder="Or type a message..."
+              placeholderTextColor={colors.textTertiary}
+              onSubmitEditing={sendTextMessage}
+              returnKeyType="send"
             />
-          </Pressable>
-        </View>
+            <Pressable
+              style={({ pressed }) => [
+                styles.sendButton,
+                {
+                  backgroundColor: textInput.trim() ? colors.accent : colors.fill,
+                  opacity: pressed && textInput.trim() ? 0.7 : 1,
+                },
+              ]}
+              onPress={sendTextMessage}
+              disabled={!textInput.trim()}
+            >
+              <Ionicons
+                name="arrow-up"
+                size={20}
+                color={textInput.trim() ? '#FFFFFF' : colors.textTertiary}
+              />
+            </Pressable>
+          </View>
+        )}
       </View>
     </KeyboardAvoidingView>
   );
