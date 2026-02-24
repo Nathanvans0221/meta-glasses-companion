@@ -2,7 +2,7 @@ import { useSettingsStore } from '../stores/settingsStore';
 
 const FUSIONAUTH_URL = 'https://auth.silverfern.app';
 const APPLICATION_ID = '4f8a80bc-8d41-48dd-81cd-9580a6b7c610';
-const API_KEY = 'Wqbx4M_8N1LycUVmOxGU9AS2Xu3lFbzr4E8oYIYqO1bK2w6yAjmaM26a';
+const API_KEY = 'm9Y56RXZ5CEQ1EOi36K_A5hKk5wQ2JuxdmBn5CqofLlNiowFA4Tux6Mg';
 
 interface FusionAuthLoginResponse {
   token: string;
