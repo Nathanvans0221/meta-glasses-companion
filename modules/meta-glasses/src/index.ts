@@ -118,7 +118,7 @@ export async function stopStreaming(): Promise<{ status: string }> {
 }
 
 /** Capture a single photo from the glasses camera. Result via onPhotoCapture. */
-export function capturePhoto(format?: PhotoFormat): boolean {
+export async function capturePhoto(format?: PhotoFormat): Promise<boolean> {
   return MetaGlassesNative.capturePhoto(format ?? 'jpeg');
 }
 

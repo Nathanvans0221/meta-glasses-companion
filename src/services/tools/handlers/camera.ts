@@ -37,7 +37,7 @@ export const capturePhotoTool: RegisteredTool = {
 
     // Trigger photo capture — result is delivered asynchronously via onPhotoCapture event,
     // which HomeScreen forwards to Gemini as an image frame
-    const triggered = glassesService.capturePhoto('jpeg');
+    const triggered = await glassesService.capturePhoto('jpeg');
 
     if (!triggered) {
       return {

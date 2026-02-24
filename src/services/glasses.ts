@@ -126,7 +126,7 @@ class GlassesService {
    * Capture a single photo. Result delivered via onPhotoCapture callback.
    * Requires an active camera stream.
    */
-  capturePhoto(format?: MetaGlasses.PhotoFormat): boolean {
+  async capturePhoto(format?: MetaGlasses.PhotoFormat): Promise<boolean> {
     if (!this.configured) return false;
     return MetaGlasses.capturePhoto(format);
   }

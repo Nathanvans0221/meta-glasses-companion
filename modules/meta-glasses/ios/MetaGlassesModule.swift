@@ -247,11 +247,13 @@ public class MetaGlassesModule: Module {
 
     // ─── Photo Capture ───────────────────────────────────────────
 
-    Function("capturePhoto") { (format: String?) -> Bool in
+    AsyncFunction("capturePhoto") { (format: String?) -> Bool in
 #if canImport(MWDATCamera)
       guard let session = self.streamSession else { return false }
       let photoFormat: PhotoCaptureFormat = format == "heic" ? .heic : .jpeg
-      return session.capturePhoto(format: photoFormat)
+      return await MainActor.run {
+        session.capturePhoto(format: photoFormat)
+      }
 #else
       return false
 #endif
