@@ -18,6 +18,7 @@
       "infoPlist": {
         "NSBluetoothAlwaysUsageDescription": "WorkSuite Voice uses Bluetooth to connect to your Meta Ray-Ban glasses for hands-free voice commands.",
         "NSMicrophoneUsageDescription": "WorkSuite Voice uses the microphone to capture voice commands for AI processing.",
+        "NSCameraUsageDescription": "WorkSuite Voice uses the camera on your Meta glasses for visual AI features.",
         "UIBackgroundModes": [
           "audio",
           "bluetooth-central"
@@ -48,7 +49,7 @@
         "expo-build-properties",
         {
           "ios": {
-            "deploymentTarget": "15.1"
+            "deploymentTarget": "15.2"
           }
         }
       ],
@@ -63,8 +64,10 @@
           "bluetoothAlwaysPermission": "WorkSuite Voice needs Bluetooth to connect to Meta Ray-Ban glasses."
         }
       ],
-      "@mykin-ai/expo-audio-stream"
+      "@mykin-ai/expo-audio-stream",
+      "./plugins/withMetaDAT"
     ],
+    "scheme": "worksuitevoice",
     "updates": {
       "url": "https://u.expo.dev/530c0bbd-fe42-4480-ae98-9a226e4d09cd",
       "checkAutomatically": "ON_LOAD",

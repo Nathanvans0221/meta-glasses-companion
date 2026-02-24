@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as Linking from 'expo-linking';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { DevicesScreen } from './src/screens/DevicesScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
@@ -12,6 +13,7 @@ import { useTheme } from './src/hooks/useTheme';
 import { useSettingsStore } from './src/stores/settingsStore';
 import { useAuthStore } from './src/stores/authStore';
 import { isTokenExpired } from './src/services/auth';
+import { glassesService } from './src/services/glasses';
 import { TYPOGRAPHY, SPACING } from './src/design/tokens';
 
 const Tab = createBottomTabNavigator();
@@ -28,6 +30,26 @@ export default function App() {
   const token = useAuthStore((s) => s.token);
 
   const isLoggedIn = token !== null && !isTokenExpired(token);
+
+  // Initialize Meta DAT SDK and handle deep link callbacks
+  useEffect(() => {
+    glassesService.initialize().catch(() => {});
+
+    // Handle Meta AI app OAuth callback URLs
+    const sub = Linking.addEventListener('url', ({ url }) => {
+      glassesService.handleDeepLink(url).catch(() => {});
+    });
+
+    // Check if app was opened via deep link
+    Linking.getInitialURL().then((url) => {
+      if (url) glassesService.handleDeepLink(url).catch(() => {});
+    });
+
+    return () => {
+      sub.remove();
+      glassesService.cleanup();
+    };
+  }, []);
 
   if (!isLoggedIn) {
     return (
