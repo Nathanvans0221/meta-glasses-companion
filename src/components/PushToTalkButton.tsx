@@ -89,6 +89,7 @@ export function PushToTalkButton() {
         setAudioState('processing');
         addMessage('user', '[Voice message]');
         addMessage('assistant', 'On it...');
+        audioService.playAcknowledgmentTone();
       } else {
         setAudioState('idle');
       }

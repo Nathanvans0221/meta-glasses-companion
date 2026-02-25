@@ -34,6 +34,10 @@ export function HomeScreen() {
   const connectedAt = useRef<number>(0);
   const handsFreeActive = useRef(false);
   const cameraStreamActive = useRef(false);
+  // Controls whether audio chunks are forwarded to Gemini.
+  // When false, recording stays alive (keeps iOS background audio session)
+  // but chunks are discarded to prevent echo during playback.
+  const forwardingAudio = useRef(true);
 
   useEffect(() => {
     if (keepAwake) {
@@ -52,27 +56,59 @@ export function HomeScreen() {
     if (!geminiService.isConnected()) return;
 
     handsFreeActive.current = true;
+    forwardingAudio.current = true;
     setAudioState('recording');
 
-    try {
-      await audioService.startStreamingRecording((base64Pcm) => {
-        geminiService.sendAudio(base64Pcm);
-      });
-    } catch (err) {
-      handsFreeActive.current = false;
-      addMessage('system', `Hands-free mic error: ${err}`);
-      setAudioState('idle');
+    // Only start a new recording session if one isn't already running
+    if (!audioService.getIsStreaming()) {
+      try {
+        await audioService.startStreamingRecording((base64Pcm) => {
+          // Only forward to Gemini when flag is set — prevents echo during playback
+          if (forwardingAudio.current) {
+            geminiService.sendAudio(base64Pcm);
+          }
+        });
+      } catch (err) {
+        handsFreeActive.current = false;
+        forwardingAudio.current = false;
+        addMessage('system', `Hands-free mic error: ${err}`);
+        setAudioState('idle');
+      }
     }
   }, [setAudioState, addMessage]);
 
-  const stopHandsFreeListening = useCallback(async () => {
-    if (!handsFreeActive.current) return;
-    handsFreeActive.current = false;
+  /**
+   * Resume forwarding audio chunks to Gemini after playback finishes.
+   * Recording was never stopped, so we just flip the flag.
+   */
+  const resumeHandsFreeForwarding = useCallback(() => {
+    const handsFree = useSettingsStore.getState().handsFreeMode;
+    if (!handsFree || !geminiService.isConnected()) return;
 
-    try {
-      await audioService.stopStreamingRecording();
-    } catch {
-      // Ignore
+    if (audioService.getIsStreaming()) {
+      // Recording still alive — just resume forwarding
+      handsFreeActive.current = true;
+      forwardingAudio.current = true;
+      setAudioState('recording');
+    } else {
+      // Recording died (shouldn't happen) — restart fully
+      setTimeout(() => startHandsFreeListening(), 300);
+    }
+  }, [setAudioState, startHandsFreeListening]);
+
+  /**
+   * Fully stop hands-free recording. Only used on disconnect/cleanup.
+   */
+  const stopHandsFreeListening = useCallback(async () => {
+    handsFreeActive.current = false;
+    forwardingAudio.current = false;
+
+    if (audioService.getIsStreaming()) {
+      try {
+        await audioService.stopStreamingRecording();
+      } catch {
+        // Ignore
+      }
     }
     setAudioState('idle');
   }, [setAudioState]);
@@ -82,15 +118,22 @@ export function HomeScreen() {
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (nextState) => {
       if (nextState === 'active') {
-        // App came back to foreground — resume hands-free if it was interrupted
         const handsFree = useSettingsStore.getState().handsFreeMode;
-        if (handsFree && geminiService.isConnected() && !handsFreeActive.current) {
-          setTimeout(() => startHandsFreeListening(), 500);
+        if (handsFree && geminiService.isConnected()) {
+          if (audioService.getIsStreaming() && !handsFreeActive.current) {
+            // Recording survived background — just resume forwarding
+            handsFreeActive.current = true;
+            forwardingAudio.current = true;
+            setAudioState('recording');
+          } else if (!audioService.getIsStreaming()) {
+            // Recording died in background — restart
+            setTimeout(() => startHandsFreeListening(), 500);
+          }
         }
       }
     });
     return () => subscription.remove();
-  }, [startHandsFreeListening]);
+  }, [startHandsFreeListening, setAudioState]);
 
   // ─── Glasses camera: stream frames to Gemini ─────────────────────
 
@@ -241,12 +284,8 @@ export function HomeScreen() {
 
     audioService.onPlaybackFinished(() => {
       setAudioState('idle');
-
-      // In hands-free mode, auto-restart listening after playback finishes
-      const handsFree = useSettingsStore.getState().handsFreeMode;
-      if (handsFree && geminiService.isConnected()) {
-        setTimeout(() => startHandsFreeListening(), 300);
-      }
+      // Resume hands-free forwarding (recording was never stopped)
+      resumeHandsFreeForwarding();
     });
 
     geminiService.onTranscript((text, role) => {
@@ -254,15 +293,17 @@ export function HomeScreen() {
     });
 
     geminiService.onAudioResponse((base64Audio) => {
-      // In hands-free mode, stop recording when Gemini starts responding
-      // to avoid echo feedback. This block runs once per turn (handsFreeActive
-      // is set false on the first audio chunk).
+      // In hands-free mode: stop forwarding (not recording!) when Gemini responds
+      // to prevent echo. Recording stays alive to keep iOS background audio session.
+      // This block runs once per turn (handsFreeActive is set false on first chunk).
       if (handsFreeActive.current) {
         handsFreeActive.current = false;
-        audioService.stopStreamingRecording().catch(() => {});
+        forwardingAudio.current = false;
+        // DON'T call audioService.stopStreamingRecording() — keep recording alive
         setAudioState('processing');
         addMessage('user', '[Voice message]');
         addMessage('assistant', 'On it...');
+        audioService.playAcknowledgmentTone();
       }
 
       audioService.addAudioChunk(base64Audio);
@@ -277,19 +318,11 @@ export function HomeScreen() {
         } catch (err) {
           addMessage('system', `Audio playback error: ${err}`);
           setAudioState('idle');
-          // Try to resume hands-free listening even after playback error
-          const handsFree = useSettingsStore.getState().handsFreeMode;
-          if (handsFree && geminiService.isConnected()) {
-            setTimeout(() => startHandsFreeListening(), 300);
-          }
+          resumeHandsFreeForwarding();
         }
       } else {
         setAudioState('idle');
-        // No audio response — resume listening in hands-free mode
-        const handsFree = useSettingsStore.getState().handsFreeMode;
-        if (handsFree && geminiService.isConnected()) {
-          setTimeout(() => startHandsFreeListening(), 300);
-        }
+        resumeHandsFreeForwarding();
       }
     });
 
@@ -300,8 +333,9 @@ export function HomeScreen() {
         : 0;
       connectedAt.current = 0;
 
-      // Stop hands-free recording on disconnect
-      if (handsFreeActive.current) {
+      // Fully stop hands-free recording on disconnect
+      forwardingAudio.current = false;
+      if (handsFreeActive.current || audioService.getIsStreaming()) {
         handsFreeActive.current = false;
         audioService.stopStreamingRecording().catch(() => {});
       }
@@ -335,7 +369,8 @@ export function HomeScreen() {
 
     return () => {
       unsub();
-      if (handsFreeActive.current) {
+      forwardingAudio.current = false;
+      if (handsFreeActive.current || audioService.getIsStreaming()) {
         handsFreeActive.current = false;
         audioService.stopStreamingRecording().catch(() => {});
       }

@@ -92,6 +92,7 @@ function createWavBase64(pcmBase64: string): string {
 
 class AudioService {
   private sound: Audio.Sound | null = null;
+  private toneSound: Audio.Sound | null = null;
   private playbackFinishedCallback: (() => void) | null = null;
   private audioChunks: string[] = [];
   private audioFileCounter = 0;
@@ -330,6 +331,68 @@ class AudioService {
     });
   }
 
+  /**
+   * Play a short acknowledgment chime so the user knows their request
+   * was received. Uses a separate Sound instance so it doesn't conflict
+   * with Gemini audio playback.
+   */
+  async playAcknowledgmentTone(): Promise<void> {
+    try {
+      const sampleRate = GEMINI_OUTPUT_SAMPLE_RATE;
+      const note1Freq = 880; // A5
+      const note2Freq = 1175; // D6
+      const noteDurationMs = 80;
+      const samplesPerNote = Math.floor((sampleRate * noteDurationMs) / 1000);
+      const totalSamples = samplesPerNote * 2;
+      const fadeLen = Math.floor(samplesPerNote * 0.15);
+
+      const pcm = new Int16Array(totalSamples);
+      for (let i = 0; i < totalSamples; i++) {
+        const freq = i < samplesPerNote ? note1Freq : note2Freq;
+        const noteI = i < samplesPerNote ? i : i - samplesPerNote;
+        let amp = 0.25;
+        if (noteI < fadeLen) amp *= noteI / fadeLen;
+        if (noteI > samplesPerNote - fadeLen) amp *= (samplesPerNote - noteI) / fadeLen;
+        pcm[i] = Math.floor(
+          amp * Math.sin((2 * Math.PI * freq * noteI) / sampleRate) * 0x7fff,
+        );
+      }
+
+      const bytes = new Uint8Array(pcm.buffer);
+      let binary = '';
+      const chunkSize = 8192;
+      for (let j = 0; j < bytes.length; j += chunkSize) {
+        const chunk = bytes.subarray(j, Math.min(j + chunkSize, bytes.length));
+        binary += String.fromCharCode.apply(null, Array.from(chunk));
+      }
+      const wavBase64 = createWavBase64(btoa(binary));
+
+      const fileUri = `${FileSystem.cacheDirectory}ack_tone.wav`;
+      await FileSystem.writeAsStringAsync(fileUri, wavBase64, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+
+      if (this.toneSound) {
+        await this.toneSound.unloadAsync();
+      }
+
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: fileUri },
+        { shouldPlay: true, volume: 0.6 },
+      );
+      this.toneSound = sound;
+
+      sound.setOnPlaybackStatusUpdate((status) => {
+        if (status.isLoaded && status.didJustFinish) {
+          sound.unloadAsync();
+          this.toneSound = null;
+        }
+      });
+    } catch {
+      // Non-critical — don't block the main flow
+    }
+  }
+
   async cleanup(): Promise<void> {
     if (this.isStreaming) {
       await this.stopStreamingRecording();
@@ -337,6 +400,10 @@ class AudioService {
     if (this.sound) {
       await this.sound.unloadAsync();
       this.sound = null;
+    }
+    if (this.toneSound) {
+      await this.toneSound.unloadAsync();
+      this.toneSound = null;
     }
     this.audioChunks = [];
     this.playbackFinishedCallback = null;
